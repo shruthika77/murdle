@@ -1,0 +1,176 @@
+[
+  {
+    "id": "case-001",
+    "title": "The Missing Manor Chef",
+    "story": "Lord Ashwin was found dead in the Library after a dinner party. Three guests were each alone in a different room, each holding a different object.",
+    "suspects": [
+      {
+        "name": "Chef Marigold",
+        "trait": "Wears an apron, hates being interrupted"
+      },
+      {
+        "name": "Inspector Jasmine",
+        "trait": "Always carries a notebook"
+      },
+      {
+        "name": "Gardener Tulsi",
+        "trait": "Has muddy boots"
+      }
+    ],
+    "weapons": [
+      {
+        "name": "Rolling Pin",
+        "description": "Heavy wooden pin"
+      },
+      {
+        "name": "Candlestick",
+        "description": "Brass, very heavy"
+      },
+      {
+        "name": "Garden Shears",
+        "description": "Sharp, rusty blades"
+      }
+    ],
+    "locations": [
+      {
+        "name": "Kitchen",
+        "description": "Smells of spices"
+      },
+      {
+        "name": "Library",
+        "description": "Silent and dusty"
+      },
+      {
+        "name": "Greenhouse",
+        "description": "Warm and humid"
+      }
+    ],
+    "clues": [
+      "The person in the Kitchen held neither the Candlestick nor the Garden Shears.",
+      "Chef Marigold was not in the Kitchen or the Greenhouse, and Inspector Jasmine was not in the Kitchen.",
+      "The Candlestick was not in the Greenhouse. The victim was found in the Library."
+    ],
+    "solution": {
+      "suspect": "Chef Marigold",
+      "weapon": "Candlestick",
+      "location": "Library"
+    },
+    "explanation": "Clue 1: Kitchen = Rolling Pin. Clue 2: Marigold = Library, Jasmine = Greenhouse, so Tulsi = Kitchen. Clue 3: Candlestick is not in the Greenhouse, so Jasmine has the Shears and Marigold the Candlestick. The crime was in the Library: Marigold, Candlestick, Library."
+  },
+  {
+    "id": "case-002",
+    "title": "Poison at the Masquerade",
+    "story": "A guest collapsed on the Balcony during the masked ball. Each suspect hid in a different spot with a different weapon.",
+    "suspects": [
+      {
+        "name": "Dr. Vance",
+        "trait": "Carries a stethoscope"
+      },
+      {
+        "name": "Madam Rue",
+        "trait": "Always veiled"
+      },
+      {
+        "name": "Captain Bly",
+        "trait": "Covered in medals"
+      }
+    ],
+    "weapons": [
+      {
+        "name": "Dagger",
+        "description": "Slim and silver"
+      },
+      {
+        "name": "Poison Vial",
+        "description": "Smells of almonds"
+      },
+      {
+        "name": "Rope",
+        "description": "Thick and frayed"
+      }
+    ],
+    "locations": [
+      {
+        "name": "Cellar",
+        "description": "Cold and dark"
+      },
+      {
+        "name": "Balcony",
+        "description": "Overlooks the garden"
+      },
+      {
+        "name": "Study",
+        "description": "Leather chairs"
+      }
+    ],
+    "clues": [
+      "The Poison Vial was not in the Cellar or on the Balcony.",
+      "Madam Rue stayed away from the Study and the Balcony, and never carried the Rope.",
+      "Captain Bly never touched the Poison Vial. The crime took place on the Balcony."
+    ],
+    "solution": {
+      "suspect": "Captain Bly",
+      "weapon": "Rope",
+      "location": "Balcony"
+    },
+    "explanation": "Clue 1: Poison = Study. Clue 2: Rue = Cellar with the Dagger. Clue 3: Bly is not in the Study, so Bly = Balcony, Vance = Study. Bly holds the Rope. The crime was on the Balcony."
+  },
+  {
+    "id": "case-003",
+    "title": "The Parlour Poker",
+    "story": "The house was silent until a scream came from the Garage. Three people, three rooms, three weapons.",
+    "suspects": [
+      {
+        "name": "Lady Quill",
+        "trait": "Fond of pearls"
+      },
+      {
+        "name": "Professor Moss",
+        "trait": "Absent-minded"
+      },
+      {
+        "name": "Butler Finch",
+        "trait": "Impeccably polite"
+      }
+    ],
+    "weapons": [
+      {
+        "name": "Letter Opener",
+        "description": "Brass, razor tip"
+      },
+      {
+        "name": "Candlestick",
+        "description": "Tall and heavy"
+      },
+      {
+        "name": "Fireplace Poker",
+        "description": "Iron, blackened"
+      }
+    ],
+    "locations": [
+      {
+        "name": "Attic",
+        "description": "Dusty trunks"
+      },
+      {
+        "name": "Garage",
+        "description": "Smells of oil"
+      },
+      {
+        "name": "Parlour",
+        "description": "Warm fireplace"
+      }
+    ],
+    "clues": [
+      "Lady Quill was neither in the Attic nor the Garage.",
+      "The Letter Opener was kept in the Attic. The Poker was not in the Parlour.",
+      "Professor Moss was not in the Garage. The crime occurred in the Garage."
+    ],
+    "solution": {
+      "suspect": "Butler Finch",
+      "weapon": "Fireplace Poker",
+      "location": "Garage"
+    },
+    "explanation": "Clue 1: Quill = Parlour. Clue 2: Opener = Attic, so the Poker is in the Garage and the Candlestick in the Parlour. Clue 3: Moss = Attic, Finch = Garage. The crime was in the Garage: Finch, Poker, Garage."
+  }
+]
