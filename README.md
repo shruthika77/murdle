@@ -2,7 +2,8 @@
 
 A multi-device murder-mystery game. A **host (admin)** creates a game and shares a join link. **Teams** open the
 link on their own phones, read the case, fill in a deduction grid and race to name the suspect, weapon and location.
-Scores update live on every screen.
+Everyone waits in a live lobby, the host starts the round, a 15-second get-ready countdown runs on every screen,
+then the clock starts. Scores update live on every screen.
 
 Stack: Supabase (Auth, Postgres + Row Level Security, Realtime) and a static Vite site hosted on Render.
 
@@ -50,6 +51,22 @@ its join link, and open that link in a private window to play as a team.
 
 The anon key is meant to be public. Security comes from Row Level Security and the server-side functions in
 `schema.sql`, never from hiding the key. Do **not** put the `service_role` key in this project.
+
+## How a round works
+
+1. **Lobby.** Teams open the join link and appear in the host's console and on every player's screen as they arrive.
+   Each player can tap **I'm ready** so the host can see who is set.
+2. **Start.** The host picks a puzzle and presses **Start round**.
+3. **Get ready.** A full-screen countdown (15 seconds by default, 0–120 in *Rules and scoring*) runs on every phone and the
+   projector. The puzzle text stays locked in the database until it reaches zero, so nobody can peek early, and answers are
+   rejected until the clock starts.
+4. **Play.** The round timer starts. Teams read the case and use the connected Murdle-style deduction grid.
+5. **Finish.** The round closes on time-out, when the host stops it, or when teams finish. The host can reveal the answer.
+
+## Updating an existing project
+
+If you already ran an older `schema.sql`, run only `supabase/migration_002_lobby_countdown.sql` in the SQL editor.
+Fresh projects just run `supabase/schema.sql` (it now includes the migration).
 
 ## Puzzle JSON format
 

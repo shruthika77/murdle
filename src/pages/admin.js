@@ -1,7 +1,7 @@
 import { sb } from '../supabase.js';
-import { esc, topbar, $, $$, guard, toast, joinUrl, copyText, download } from '../ui.js';
+import { esc, topbar, $, $$, guard, toast, joinUrl, copyText, download, icon, statusBadge } from '../ui.js';
 import { requireAdmin } from './_auth.js';
-import { importPuzzles, puzzleCardHtml } from '../puzzles.js';
+import { importPuzzles, caseHtml } from '../puzzles.js';
 import { SAMPLES } from '../samples.js';
 
 export async function mount(app) {
@@ -11,7 +11,7 @@ export async function mount(app) {
   let tab = 'games';
   let games = [];
   let puzzles = [];
-  let open = new Set();
+  const open = new Set();
 
   async function refresh() {
     const [g, p] = await Promise.all([
@@ -25,12 +25,14 @@ export async function mount(app) {
   }
 
   function draw() {
-    app.innerHTML = topbar(`<span class="who">${esc(user.email)}</span><button class="btn s o" id="out" style="color:#f5efdc">Sign out</button>`) + `
-      <main><h1>Host dashboard</h1>
-      <div class="tabs" role="tablist">
-        <button role="tab" data-tab="games" aria-selected="${tab === 'games'}">Games (${games.length})</button>
-        <button role="tab" data-tab="puzzles" aria-selected="${tab === 'puzzles'}">Puzzle library (${puzzles.length})</button>
-      </div><div id="pane"></div></main>`;
+    app.innerHTML = topbar(`<span class="muted sm">${esc(user.email)}</span>
+      <button class="btn sm sec" id="out">${icon('logout', 15)} Sign out</button>`) + `
+      <main class="wrap">
+        <div class="page-h"><div><div class="eyebrow">Host dashboard</div><h1 style="font-size:34px">Your games</h1></div></div>
+        <div class="tabs" role="tablist">
+          <button role="tab" data-tab="games" aria-selected="${tab === 'games'}">Games (${games.length})</button>
+          <button role="tab" data-tab="puzzles" aria-selected="${tab === 'puzzles'}">Puzzle library (${puzzles.length})</button>
+        </div><div id="pane"></div></main>`;
     guard($('#out'), async () => { await sb.auth.signOut(); location.hash = '#/'; });
     $$('[data-tab]').forEach((b) => (b.onclick = () => { tab = b.dataset.tab; draw(); }));
     tab === 'games' ? drawGames() : drawPuzzles();
@@ -38,17 +40,18 @@ export async function mount(app) {
 
   function drawGames() {
     $('#pane').innerHTML = `
-      <div class="card"><h3>New game</h3>
-        <form id="ng" class="inline"><label>Game name<input id="gt" maxlength="80" required placeholder="Friday office mystery night"></label>
-        <button class="btn" type="submit">Create game</button></form></div>
-      <div class="card" style="padding:0">${games.length ? games.map((g) => `
-        <div class="row"><div class="grow"><b>${esc(g.title)}</b>
-          <span class="pill ${g.status === 'active' ? 'live' : g.status === 'finished' ? 'done' : 'lobby'}">${g.status}</span><br>
-          <span class="mut">${new Date(g.created_at).toLocaleString()}</span></div>
-          <button class="btn s o" data-copy="${esc(g.join_code)}">Copy join link</button>
-          <a class="btn s" style="text-decoration:none;display:inline-flex;align-items:center" href="#/admin/game/${g.id}">Manage</a>
-          <button class="btn s r" data-delgame="${g.id}">Delete</button></div>`).join('')
-        : '<div class="row mut">No games yet. Create one above, then share its join link with your teams.</div>'}</div>`;
+      <div class="card mb"><div class="card-h"><h3>${icon('plus', 17)} New game</h3></div>
+        <form id="ng" class="flex wrapf" style="align-items:flex-end">
+          <label class="field grow" style="margin:0;min-width:240px"><span>Game name</span><input id="gt" maxlength="80" required placeholder="Friday office mystery night"></label>
+          <button class="btn lg" type="submit">Create game</button></form></div>
+      <div class="card flush">${games.length ? games.map((g) => `
+        <div class="item"><div class="grow"><div class="b">${esc(g.title)}</div>
+          <div class="muted sm">${new Date(g.created_at).toLocaleString()}</div></div>
+          ${statusBadge(g.status)}
+          <button class="btn sm sec" data-copy="${esc(g.join_code)}">${icon('link', 15)} Copy join link</button>
+          <a class="btn sm" href="#/admin/game/${g.id}">Manage</a>
+          <button class="btn sm ghost" data-delgame="${g.id}" aria-label="Delete game">${icon('trash', 16)}</button></div>`).join('')
+        : `<div class="empty">${icon('flag', 28)}<p class="mt-2">No games yet. Create one above, then share its join link with your teams.</p></div>`}</div>`;
     $('#ng').onsubmit = async (e) => {
       e.preventDefault();
       const { data, error } = await sb.from('games').insert({ host_id: user.id, title: $('#gt').value.trim() }).select('id').single();
@@ -66,22 +69,22 @@ export async function mount(app) {
 
   function drawPuzzles() {
     $('#pane').innerHTML = `
-      <div class="card"><h3>Add puzzles</h3>
-        <p class="mut">Upload a .json file, or paste one puzzle or a list. Puzzles with an existing id are updated.
+      <div class="card mb"><div class="card-h"><h3>${icon('book', 17)} Add puzzles</h3></div>
+        <p class="muted sm">Upload a .json file or paste one puzzle or a list. Puzzles with an existing id are updated.
         Each puzzle needs exactly 3 suspects, 3 weapons and 3 locations.</p>
         <input type="file" id="pf" accept=".json,application/json" aria-label="Puzzle JSON file">
-        <p><textarea id="pt" placeholder="Paste puzzle JSON here" aria-label="Puzzle JSON"></textarea></p>
-        <button class="btn" id="imp">Import puzzles</button>
-        <button class="btn o" id="samples">Add the 3 sample puzzles</button>
-        <button class="btn o" id="exp"${puzzles.length ? '' : ' disabled'}>Export library (.json)</button></div>
-      <div class="card" style="padding:0">${puzzles.length ? puzzles.map((p) => `
-        <div class="row" style="align-items:flex-start"><div class="grow"><b>${esc(p.title)}</b> <span class="mut">(${esc(p.slug)})</span>
-          ${open.has(p.id) ? `<div class="note">${puzzleCardHtml(p.content, esc, p.title)}
-            <p class="ok">Answer: ${esc(p.solution.suspect)} · ${esc(p.solution.weapon)} · ${esc(p.solution.location)}</p>
-            <p>${esc(p.explanation || '')}</p></div>` : ''}</div>
-          <button class="btn s o" data-prev="${p.id}">${open.has(p.id) ? 'Hide' : 'Preview'}</button>
-          <button class="btn s r" data-delp="${p.id}">Delete</button></div>`).join('')
-        : '<div class="row mut">Your library is empty. Add the sample puzzles to try the game.</div>'}</div>`;
+        <textarea id="pt" class="mt-2" placeholder="Paste puzzle JSON here" aria-label="Puzzle JSON"></textarea>
+        <div class="flex wrapf mt-2"><button class="btn" id="imp">Import puzzles</button>
+          <button class="btn sec" id="samples">Add the 3 sample puzzles</button>
+          <button class="btn sec" id="exp"${puzzles.length ? '' : ' disabled'}>${icon('download', 15)} Export library</button></div></div>
+      <div class="card flush">${puzzles.length ? puzzles.map((p) => `
+        <div class="item" style="align-items:flex-start"><div class="grow"><div class="b">${esc(p.title)} <span class="muted sm">${esc(p.slug)}</span></div>
+          ${open.has(p.id) ? `<div class="callout mt-2">${caseHtml(p.content, esc)}
+            <div class="callout ok mt-2"><b>Answer:</b> ${esc(p.solution.suspect)} · ${esc(p.solution.weapon)} · ${esc(p.solution.location)}</div>
+            <p class="sm mt-2">${esc(p.explanation || '')}</p></div>` : ''}</div>
+          <button class="btn sm sec" data-prev="${p.id}">${icon('eye', 15)} ${open.has(p.id) ? 'Hide' : 'Preview'}</button>
+          <button class="btn sm ghost" data-delp="${p.id}" aria-label="Delete puzzle">${icon('trash', 16)}</button></div>`).join('')
+        : `<div class="empty">${icon('book', 28)}<p class="mt-2">Your library is empty. Add the sample puzzles to try the game.</p></div>`}</div>`;
 
     const run = async (text) => {
       const n = await importPuzzles(text, user.id);

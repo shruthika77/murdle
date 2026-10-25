@@ -1,4 +1,5 @@
 import { sb } from './supabase.js';
+import { icon } from './ui.js';
 
 const isStr = (s, max) => typeof s === 'string' && s.trim().length > 0 && s.length <= max;
 
@@ -48,11 +49,11 @@ export async function importPuzzles(text, ownerId) {
   return rows.length;
 }
 
-export function puzzleCardHtml(c, esc, title) {
-  const list = (a) => a.map((s) => `<div>${esc(s.name)}<br><span class="mut">${esc(s.trait || s.description || '')}</span></div>`).join('');
-  return `<h3>${esc(title || c.title)}</h3><p>${esc(c.story)}</p>
-    <div class="grid"><div><b style="color:var(--red)">Suspects</b>${list(c.suspects)}</div>
-    <div><b style="color:var(--red)">Weapons</b>${list(c.weapons)}</div>
-    <div><b style="color:var(--red)">Locations</b>${list(c.locations)}</div></div>
-    <h3>Clues</h3><ol>${c.clues.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>`;
+/** Case-file body: story, suspects / weapons / locations and clues. */
+export function caseHtml(c, esc) {
+  const col = (label, ic, list) => `<div><h4>${icon(ic, 14)} ${label}</h4>${list.map((s) =>
+    `<div class="ent"><b>${esc(s.name)}</b><span>${esc(s.trait || s.description || '')}</span></div>`).join('')}</div>`;
+  return `<p class="story">${esc(c.story)}</p>
+    <div class="trio">${col('Suspects', 'user', c.suspects)}${col('Weapons', 'weapon', c.weapons)}${col('Locations', 'pin', c.locations)}</div>
+    <h3 class="mt" style="margin-bottom:6px">Clues</h3><ol class="clues">${c.clues.map((x) => `<li><span>${esc(x)}</span></li>`).join('')}</ol>`;
 }

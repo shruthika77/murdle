@@ -1,15 +1,14 @@
 import { sb, whoAmI, syncClock, serverNow } from '../supabase.js';
-import { esc, topbar, $, $$, guard, toast, fmtTime, flash, copyText } from '../ui.js';
-import { loadState, standings, subscribe, newSolves, leaderboardHtml } from '../data.js';
-import { puzzleCardHtml } from '../puzzles.js';
-
-const blank = () => [Array(9).fill(''), Array(9).fill(''), Array(9).fill('')];
+import { esc, topbar, $, guard, toast, fmtTime, flash, copyText, icon, badge, showGetReady, hideGetReady } from '../ui.js';
+import { loadState, loadContent, standings, subscribe, newSolves, leaderboardHtml, rosterHtml, counts, phase } from '../data.js';
+import { caseHtml } from '../puzzles.js';
+import { gridHtml, emptyGrid, nextMark, legendHtml, MARK } from '../grid.js';
 
 export async function mount(app, [gameId]) {
   const { user, role } = await whoAmI();
-  const notJoined = (extra = '') => {
-    app.innerHTML = topbar() + `<main><div class="card"><h2>You're not on a team yet</h2>
-      <p>Open the join link your host sent you to create a team or join one. ${extra}</p></div></main>`;
+  const notJoined = () => {
+    app.innerHTML = topbar() + `<main class="wrap"><div class="narrow"><div class="card center"><h2>You’re not on a team yet</h2>
+      <p class="muted mt-2">Open the join link your host sent you to create a team or join one.</p><a class="btn sec" href="#/">Back</a></div></div></main>`;
   };
   if (!user || role === 'admin') {
     if (role === 'admin') { location.hash = '#/board/' + gameId; return; }
@@ -23,72 +22,121 @@ export async function mount(app, [gameId]) {
   if (!me) return notJoined();
   localStorage.setItem('cc_game', gameId);
   const { data: sec } = await sb.from('team_secrets').select('code').eq('team_id', me.id).maybeSingle();
+  const code = sec?.code || '';
 
-  let prev = st, attempts = [], closing = false, lastSig = '';
-  let keys = { puzzle: '', form: '' };
+  let prev = st, attempts = [], content = null, contentFor = null, closing = false, lastSig = '', lastPh = '';
+  const keys = { puzzle: '', form: '' };
 
-  app.innerHTML = topbar() + `<main>
-    <div class="card"><div class="inline" style="align-items:center">
-      <div><h2 style="margin:0">${esc(me.name)}</h2><span class="mut" id="mates"></span></div>
-      <div style="flex:0 0 auto;text-align:right"><span class="mut">Team code for teammates</span><br>
-        <b id="tc" style="font:26px var(--head);letter-spacing:.12em">${esc(sec?.code || '')}</b>
-        <button class="btn s o" id="ctc" aria-label="Copy team code">Copy</button></div></div></div>
-    <div id="state"></div>
-    <div id="status"></div><div id="puzzle"></div><div id="grid"></div><div id="form"></div>
-    <div class="card" style="padding:0"><div class="row"><h3 style="margin:0">Leaderboard</h3></div><div id="lb"></div></div>
-  </main>`;
-  $('#ctc').onclick = () => copyText(sec?.code || '');
+  app.innerHTML = topbar(`<span class="badge brand">${icon('users', 13)} ${esc(me.name)}</span>`) + `
+    <main class="wrap">
+      <div id="banner"></div>
+      <div id="game" class="hidden"><div class="cols play">
+        <div class="stack"><div id="puzzle"></div><div id="grid"></div></div>
+        <div class="stack side"><div id="panel"></div><div id="form"></div></div></div></div>
+      <div id="lobby" class="hidden"></div>
+      <div class="card flush mt"><div class="card-h"><h3>${icon('trophy', 17)} Leaderboard</h3></div><div id="lb"></div></div>
+    </main>`;
 
+  const myMember = () => st.teams.flatMap((t) => t.team_members).find((m) => m.user_id === user.id);
   const myResult = () => st.current
     ? st.results.find((r) => r.round_id === st.current.id && r.team_id === me.id) || { attempts: 0, done: false, solved: false, score: 0 }
     : null;
-  const roundOver = () => !st.current || st.current.status !== 'live' || st.game.status === 'finished';
+  const ph = () => phase(st.current, serverNow());
 
-  // ---------- deduction grid (saved on this device) ----------
-  const gridKey = () => `cc-grid:${st.current.id}:${me.id}`;
-  const loadGrid = () => { try { return JSON.parse(localStorage.getItem(gridKey())) || blank(); } catch { return blank(); } };
+  // ---------- team bar ----------
+  function drawBanner() {
+    $('#banner').innerHTML = `<div class="card flex wrapf mb"><div class="grow"><div class="eyebrow">Your team</div>
+      <h2 style="margin-top:2px">${esc(me.name)}</h2><div class="muted sm">${esc(st.game.title)}</div></div>
+      <div class="right"><div class="eyebrow">Team code for teammates</div>
+        <div class="flex" style="justify-content:flex-end"><b style="font:700 26px var(--display);letter-spacing:.14em">${esc(code)}</b>
+        <button class="btn sm sec" id="ctc" aria-label="Copy team code">${icon('copy', 15)} Copy</button></div></div></div>`;
+    $('#ctc').onclick = () => copyText(code);
+  }
+
+  // ---------- waiting room ----------
+  function drawLobby() {
+    const p = ph(), c = counts(st), mm = myMember();
+    const first = !st.rounds.length;
+    const title = p === 'countdown' ? 'Round starting…' : first ? 'Waiting room' : 'Waiting for the next round';
+    const sub = p === 'countdown' ? 'Get ready. The case opens in a moment.'
+      : first ? 'Waiting for your host to start. Teammates can join with your team code.' : 'Take a breath. The host will start the next round soon.';
+    $('#lobby').innerHTML = `<div class="card"><div class="card-h"><div><h3>${icon('users', 17)} ${title}</h3><div class="muted sm mt-2">${sub}</div></div>
+      <div class="flex"><span class="pulse-dot"></span><span class="sm b">${c.ready} of ${c.players} ready</span></div></div>
+      ${rosterHtml(st, { meId: user.id })}
+      <div class="flex wrapf mt">
+        <button class="btn ${mm?.ready ? 'sec' : ''}" id="rdy">${mm?.ready ? icon('check', 16) + ' You’re ready. Tap to undo' : 'I’m ready'}</button>
+        <span class="muted sm">Tell the host you’re set. It doesn’t start the game.</span></div></div>`;
+    guard($('#rdy'), async () => {
+      const { error } = await sb.rpc('set_ready', { p_game: gameId, p_ready: !mm?.ready });
+      if (error) throw new Error(error.message);
+      await refresh(true);
+    });
+  }
+
+  // ---------- case file + grid ----------
+  const gridKey = () => `cc-grid2:${st.current.id}:${me.id}`;
+  const loadGrid = () => {
+    try { const g = JSON.parse(localStorage.getItem(gridKey())); if (g && g.LS && g.LW && g.WS) return g; } catch { /* ignore */ }
+    return emptyGrid(3);
+  };
+  function drawPuzzle() {
+    const r = st.current;
+    if (!content) { $('#puzzle').innerHTML = `<div class="card"><p class="muted">Opening the case file…</p></div>`; return; }
+    $('#puzzle').innerHTML = `<div class="card"><div class="case-title"><h2>${esc(r.title)}</h2>${badge('brand', 'Round ' + r.round_no)}</div>
+      ${caseHtml(content, esc)}
+      ${r.revealed && r.reveal ? `<div class="callout ok mt"><b>Answer:</b> ${esc(r.reveal.solution.suspect)} with the ${esc(r.reveal.solution.weapon)} in the ${esc(r.reveal.solution.location)}
+        <p class="sm" style="margin:6px 0 0;color:var(--ink)">${esc(r.reveal.explanation || '')}</p></div>` : ''}</div>`;
+  }
   function drawGrid() {
-    const c = st.current.content, gr = loadGrid();
-    const table = (g, rows, cols) => `<table class="grid-t"><tr><th></th>${cols.map((x) => `<th>${esc(x.name)}</th>`).join('')}</tr>${rows.map((r, i) =>
-      `<tr><th>${esc(r.name)}</th>${[0, 1, 2].map((j) => {
-        const v = gr[g][i * 3 + j];
-        return `<td><button data-g="${g}" data-i="${i}" data-j="${j}" class="${v === '✗' ? 'x' : v ? 'v' : ''}"
-          aria-label="${esc(r.name)} and ${esc(cols[j].name)}: ${v === '✗' ? 'ruled out' : v ? 'confirmed' : 'unknown'}">${v}</button></td>`;
-      }).join('')}</tr>`).join('')}</table>`;
-    $('#grid').innerHTML = `<div class="card"><h3>Deduction grid</h3>
-      <p class="mut">Tap a cell to cycle: blank → ✗ (ruled out) → ✓ (confirmed). Saved on this device.</p>
-      <div class="gwrap">${table(0, c.suspects, c.weapons)}${table(1, c.suspects, c.locations)}${table(2, c.weapons, c.locations)}</div>
-      <button class="btn s o" id="clr">Clear grid</button></div>`;
-    $$('#grid td button').forEach((b) => (b.onclick = () => {
-      const g = +b.dataset.g, k = +b.dataset.i * 3 + +b.dataset.j, d = loadGrid();
-      d[g][k] = d[g][k] === '' ? '✗' : d[g][k] === '✗' ? '✓' : '';
-      try { localStorage.setItem(gridKey(), JSON.stringify(d)); } catch { /* storage full or blocked */ }
-      drawGrid();
-      const nb = $(`#grid [data-g="${g}"][data-i="${b.dataset.i}"][data-j="${b.dataset.j}"]`); if (nb) nb.focus();
-    }));
+    if (!content) { $('#grid').innerHTML = ''; return; }
+    $('#grid').innerHTML = `<div class="card"><div class="card-h"><h3>Deduction grid</h3>
+      <button class="btn sm ghost" id="clr">Clear grid</button></div>
+      <div class="gridwrap">${gridHtml(content, loadGrid())}</div><div class="mt-2">${legendHtml()}</div>
+      <p class="muted xs mt-2">Your marks are saved on this device.</p></div>`;
+    $('#grid').onclick = (e) => {
+      const b = e.target.closest('.cell'); if (!b) return;
+      const n = content.suspects.length, k = b.dataset.b, idx = +b.dataset.i * n + +b.dataset.j;
+      const g = loadGrid(); g[k][idx] = nextMark(g[k][idx]);
+      try { localStorage.setItem(gridKey(), JSON.stringify(g)); } catch { /* storage blocked */ }
+      const v = g[k][idx];
+      b.classList.remove('x', 'v'); if (v) b.classList.add(v);
+      b.innerHTML = v ? MARK[v] : '';
+      b.setAttribute('aria-label', b.getAttribute('aria-label').replace(/: .*$/, ': ' + (v === 'x' ? 'ruled out' : v === 'v' ? 'confirmed' : 'unknown')));
+    };
     $('#clr').onclick = () => { if (confirm('Clear your grid?')) { localStorage.removeItem(gridKey()); drawGrid(); } };
   }
 
-  // ---------- puzzle card (+ answer after reveal) ----------
-  function drawPuzzle() {
-    const r = st.current;
-    $('#puzzle').innerHTML = `<div class="card">${puzzleCardHtml(r.content, esc)}
-      ${r.revealed && r.reveal ? `<div class="note"><p class="ok">Answer: ${esc(r.reveal.solution.suspect)} with the
-        ${esc(r.reveal.solution.weapon)} in the ${esc(r.reveal.solution.location)}</p><p>${esc(r.reveal.explanation || '')}</p></div>` : ''}</div>`;
+  // ---------- side panel (timer, attempts) ----------
+  function drawPanel() {
+    const r = st.current, res = myResult(), p = ph();
+    if (!r) return;
+    const hist = attempts.length ? `<ul class="hist">${attempts.map((a, i) =>
+      `<li><span>Try ${i + 1}: ${esc(a.answer.suspect)}, ${esc(a.answer.weapon)}, ${esc(a.answer.location)}</span>
+       <b style="color:${a.correct_count === 3 ? 'var(--ok)' : 'var(--muted)'}">${a.correct_count}/3</b></li>`).join('')}</ul>` : '';
+    $('#panel').innerHTML = `<div class="card">
+      ${p === 'live'
+        ? `<div class="timer-box"><div class="eyebrow">Time left</div><div class="time" id="tm">–:––</div><div class="bar"><i id="tb" style="width:100%"></i></div></div>`
+        : `<div class="center">${badge('ok', 'Round closed')}</div>`}
+      <div class="flex between mt"><span class="muted sm">Attempts</span><b>${res.attempts} / ${r.settings.max_attempts}</b></div>
+      ${res.solved ? `<div class="callout ok mt-2"><b>Solved! +${res.score} points</b></div>`
+        : res.done ? `<div class="callout warn mt-2"><b>Finished.</b> ${res.score} points</div>` : ''}
+      ${hist}</div>`;
+    tick();
   }
 
   // ---------- answer form ----------
   function drawForm() {
     const r = st.current, res = myResult();
-    if (roundOver() || res.done) { $('#form').innerHTML = ''; return; }
-    const c = r.content, max = r.settings.max_attempts;
+    if (!r || ph() !== 'live' || st.game.status === 'finished' || res.done || !content) { $('#form').innerHTML = ''; return; }
+    const max = r.settings.max_attempts;
     const opts = (a) => a.map((x) => `<option>${esc(x.name)}</option>`).join('');
-    $('#form').innerHTML = `<div class="card"><h3>Final answer</h3>
-      <p class="mut">Your team has ${max - res.attempts} of ${max} attempts left. Anyone on your team can submit.</p>
-      <div class="grid"><label>Suspect<select id="as">${opts(c.suspects)}</select></label>
-      <label>Weapon<select id="aw">${opts(c.weapons)}</select></label>
-      <label>Location<select id="al">${opts(c.locations)}</select></label></div>
-      <p><button class="btn r" id="sub">Submit answer</button></p><p id="msg" class="err" role="status"></p></div>`;
+    $('#form').innerHTML = `<div class="card"><div class="card-h"><h3>Final answer</h3></div>
+      <p class="muted sm">${max - res.attempts} of ${max} attempts left. Anyone on your team can submit.</p>
+      <label class="field"><span>${icon('user', 14)} Suspect</span><select id="as">${opts(content.suspects)}</select></label>
+      <label class="field"><span>${icon('weapon', 14)} Weapon</span><select id="aw">${opts(content.weapons)}</select></label>
+      <label class="field"><span>${icon('pin', 14)} Location</span><select id="al">${opts(content.locations)}</select></label>
+      <button class="btn lg block danger" id="sub">Submit answer</button>
+      <p id="msg" class="b sm mt-2" style="color:var(--red)" role="status"></p></div>`;
     guard($('#sub'), async () => {
       const a = { suspect: $('#as').value, weapon: $('#aw').value, location: $('#al').value };
       if (attempts.some((x) => x.answer.suspect === a.suspect && x.answer.weapon === a.weapon && x.answer.location === a.location)) {
@@ -103,24 +151,32 @@ export async function mount(app, [gameId]) {
     });
   }
 
-  // ---------- status strip (cheap, redrawn on every update) ----------
-  function drawStatus() {
-    const g = st.game, r = st.current, res = myResult();
-    if (g.status === 'finished') { $('#state').innerHTML = '<div class="card"><h2>Game over</h2><p>Thanks for playing. Final standings are below.</p></div>'; }
-    else $('#state').innerHTML = '';
-    if (!r) { $('#status').innerHTML = `<div class="card"><h3>Waiting for the host</h3><p class="mut">The next case appears here the moment the host starts a round. Keep this page open.</p></div>`; return; }
-    const hist = attempts.length ? `<ul class="hist">${attempts.map((a, i) =>
-      `<li>Try ${i + 1}: ${esc(a.answer.suspect)} · ${esc(a.answer.weapon)} · ${esc(a.answer.location)} → ${a.correct_count} of 3 right</li>`).join('')}</ul>` : '';
-    $('#status').innerHTML = `<div class="card">
-      <div class="inline" style="align-items:center"><div><b>Round ${r.round_no}: ${esc(r.content.title)}</b></div>
-        ${r.status === 'live' ? '<div class="timer" id="tm" style="flex:0 0 auto"></div>' : '<span class="pill done" style="flex:0 0 auto">round closed</span>'}</div>
-      <p>Attempts: <b>${res.attempts}/${r.settings.max_attempts}</b>
-        ${res.solved ? `<span class="ok">Solved! +${res.score}</span>` : res.done ? `<span class="err">Finished. ${res.score} points</span>` : ''}</p>${hist}</div>`;
-    tick();
+  function drawLb() { $('#lb').innerHTML = leaderboardHtml(standings(st), me.id); }
+
+  async function ensureContent() {
+    const r = st.current, p = ph();
+    if (r && (p === 'live' || p === 'closed') && contentFor !== r.id) {
+      try { content = await loadContent(r.id); contentFor = content ? r.id : null; } catch { content = null; }
+    }
+    if (!r) { content = null; contentFor = null; }
   }
 
-  function drawLb() { $('#lb').innerHTML = leaderboardHtml(standings(st)); }
-  function drawMates() { $('#mates').textContent = st.teams.find((t) => t.id === me.id)?.team_members.map((m) => m.player_name).join(', ') || ''; }
+  function render() {
+    const r = st.current, p = ph(), finished = st.game.status === 'finished';
+    const showGame = !!r && (p === 'live' || p === 'closed');
+    $('#game').classList.toggle('hidden', !showGame);
+    $('#lobby').classList.toggle('hidden', finished || p === 'live');
+    drawBanner();
+    if (!finished && p !== 'live') drawLobby();
+    if (finished) { $('#banner').insertAdjacentHTML('afterbegin', `<div class="callout brand mb"><b>Game over.</b> Thanks for playing. Final standings are below.</div>`); }
+    drawLb();
+    if (!showGame) { keys.puzzle = keys.form = ''; return; }
+    drawPanel();
+    const pk = r.id + '|' + r.revealed + '|' + (content ? 1 : 0);
+    const fk = [r.id, r.status, myResult().done, attempts.length, p, content ? 1 : 0].join('|');
+    if (pk !== keys.puzzle) { keys.puzzle = pk; drawPuzzle(); drawGrid(); }
+    if (fk !== keys.form) { keys.form = fk; drawForm(); }
+  }
 
   async function refresh(force = false) {
     prev = st;
@@ -129,33 +185,39 @@ export async function mount(app, [gameId]) {
       const { data } = await sb.from('attempts').select('answer,correct_count').eq('round_id', st.current.id).eq('team_id', me.id).order('id');
       attempts = data || [];
     } else attempts = [];
-    const sig = JSON.stringify([st.game, st.teams, st.rounds, st.results, attempts]);
+    const sig = JSON.stringify([st.game, st.teams, st.rounds, st.results, attempts, ph()]);
     if (!force && sig === lastSig) return;
     lastSig = sig;
     newSolves(prev, st).slice(0, 1).forEach((n) => { if (n !== me.name) flash(n); });
-
-    const r = st.current, res = myResult();
-    const pk = r ? r.id + '|' + r.revealed : '';
-    const fk = r ? [r.id, r.status, res.done, attempts.length, st.game.status].join('|') : '';
-    drawMates(); drawStatus(); drawLb();
-    if (pk !== keys.puzzle) { keys.puzzle = pk; if (r) { drawPuzzle(); drawGrid(); } else { $('#puzzle').innerHTML = ''; $('#grid').innerHTML = ''; } }
-    if (fk !== keys.form) { keys.form = fk; if (r) drawForm(); else $('#form').innerHTML = ''; }
+    await ensureContent();
+    render();
   }
 
   function tick() {
-    const el = $('#tm'), r = st.current;
-    if (!el || !r || r.status !== 'live') return;
+    const r = st.current, p = ph();
+    if (p !== lastPh) {                      // phase flipped (e.g. countdown -> live): reload content and redraw
+      const was = lastPh; lastPh = p;
+      if (was) refresh(true).catch(() => {});
+    }
+    if (p === 'countdown') {
+      const cd = r.settings.countdown ?? 15;
+      showGetReady((new Date(r.started_at).getTime() - serverNow()) / 1000, cd, `Round ${r.round_no}: ${r.title}`);
+    } else hideGetReady();
+    if (p !== 'live') return;
     const left = (new Date(r.ends_at).getTime() - serverNow()) / 1000;
-    el.textContent = '⏱ ' + fmtTime(left);
-    el.classList.toggle('low', left <= 30);
+    const total = Math.max(1, (new Date(r.ends_at) - new Date(r.started_at)) / 1000);
+    const el = $('#tm'), bar = $('#tb');
+    if (el) { el.textContent = fmtTime(left); el.classList.toggle('low', left <= 30); }
+    if (bar) { bar.style.width = Math.max(0, Math.min(100, (left / total) * 100)) + '%'; bar.classList.toggle('low', left <= 30); }
     if (left <= 0 && !closing) {
       closing = true;
       sb.rpc('close_expired', { p_round: r.id }).then(() => refresh(true)).finally(() => (closing = false));
     }
   }
-  const timer = setInterval(tick, 500);
+  const timer = setInterval(tick, 250);
 
+  lastPh = ph();
   await refresh(true);
   const unsub = subscribe(gameId, () => refresh().catch(() => {}));
-  return () => { clearInterval(timer); unsub(); };
+  return () => { clearInterval(timer); unsub(); hideGetReady(); };
 }

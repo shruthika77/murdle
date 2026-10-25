@@ -23,10 +23,10 @@ async function route() {
   const app = document.getElementById('app');
 
   if (!configured) {
-    app.innerHTML = topbar() + `<main><div class="card"><h2>Setup needed</h2>
-      <p>This site is missing its Supabase settings. Set <code>VITE_SUPABASE_URL</code> and
-      <code>VITE_SUPABASE_ANON_KEY</code> (in a local <code>.env</code> file, or in Render's environment
-      variables) and rebuild.</p></div></main>`;
+    app.innerHTML = topbar() + `<main class="wrap"><div class="narrow"><div class="card"><h2>Setup needed</h2>
+      <p class="muted mt-2">This site is missing its Supabase settings. Set <code>VITE_SUPABASE_URL</code> and
+      <code>VITE_SUPABASE_ANON_KEY</code> (in a local <code>.env</code> file, or in Render’s environment
+      variables) and rebuild.</p></div></div></main>`;
     return;
   }
 
@@ -34,7 +34,7 @@ async function route() {
   for (const [re, load] of routes) {
     const m = path.match(re);
     if (!m) continue;
-    app.innerHTML = '<main><p class="mut">Loading…</p></main>';
+    app.innerHTML = topbar() + '<main class="wrap"><p class="muted">Loading…</p></main>';
     try {
       const mod = await load();
       if (my !== token) return;
@@ -43,12 +43,12 @@ async function route() {
       cleanup = c || null;
     } catch (e) {
       if (my !== token) return;
-      app.innerHTML = topbar() + `<main><div class="card"><h2>Something went wrong</h2>
-        <p class="err">${esc(e.message || e)}</p><p><a href="#/">Back to start</a></p></div></main>`;
+      app.innerHTML = topbar() + `<main class="wrap"><div class="narrow"><div class="card"><h2>Something went wrong</h2>
+        <p class="mt-2" style="color:var(--red)">${esc(e.message || e)}</p><a class="btn sec mt" href="#/">Back to start</a></div></div></main>`;
     }
     return;
   }
-  app.innerHTML = topbar() + '<main><div class="card"><h2>Page not found</h2><p><a href="#/">Back to start</a></p></div></main>';
+  app.innerHTML = topbar() + '<main class="wrap"><div class="narrow"><div class="card center"><h2>Page not found</h2><a class="btn sec mt" href="#/">Back to start</a></div></div></main>';
 }
 
 window.addEventListener('hashchange', route);
