@@ -1,7 +1,7 @@
 import { sb, syncClock, serverNow } from '../supabase.js';
-import { esc, topbar, $, $$, guard, toast, joinUrl, copyText, download, fmtTime, flash, icon, statusBadge, badge } from '../ui.js';
+import { esc, topbar, $, $$, guard, toast, joinUrl, copyText, download, fmtTime, icon, statusBadge, badge } from '../ui.js';
 import { requireAdmin } from './_auth.js';
-import { loadState, standings, subscribe, newSolves, phase, rosterHtml, counts } from '../data.js';
+import { loadState, standings, subscribe, newSolves, phase, rosterHtml, counts, scoreboardHtml, feedHtml } from '../data.js';
 
 const FIELDS = [
   ['countdown', 'Get-ready countdown (seconds)', 0, 120],
@@ -11,8 +11,10 @@ const FIELDS = [
   ['penalty', 'Penalty per wrong attempt', 0, 10000],
   ['max_attempts', 'Attempts per team', 1, 20],
   ['partial', 'Partial points per correct item', 0, 1000],
+  ['max_hints', 'Hints per team per round (0 = off)', 0, 3],
+  ['hint_cost', 'Points a hint costs', 0, 1000],
 ];
-const DEFAULTS = { countdown: 15, timer: 300, base: 100, bonus: 50, penalty: 10, max_attempts: 3, partial: 10, use_partial: true };
+const DEFAULTS = { countdown: 15, timer: 300, base: 100, bonus: 50, penalty: 10, max_attempts: 3, partial: 10, use_partial: true, max_hints: 2, hint_cost: 15 };
 
 export async function mount(app, [gameId]) {
   const user = await requireAdmin(app);
@@ -21,14 +23,14 @@ export async function mount(app, [gameId]) {
 
   let st = await loadState(gameId);
   if (st.game.host_id !== user.id) throw new Error('You are not the host of this game.');
-  let secret = null, secretFor = null, chosen = '', prev = st, closing = false;
+  let chosen = '', prev = st, closing = false;
   const { data: pz } = await sb.from('puzzles').select('id,title').eq('owner_id', user.id).order('created_at');
   const puzzles = pz || [];
 
   app.innerHTML = topbar(`<a class="btn sm sec" href="#/admin">${icon('flag', 15)} All games</a>`) + `
     <main class="wrap"><div id="hdr"></div>
       <div class="cols"><div class="stack"><div id="round"></div><div id="board"></div></div>
-        <div class="stack side"><div id="invite"></div><div id="settings"></div></div></div></main>`;
+        <div class="stack side"><div id="invite"></div><div id="feed"></div><div id="settings"></div></div></div></main>`;
 
   const cfg = () => ({ ...DEFAULTS, ...st.game.settings });
 
@@ -76,13 +78,6 @@ export async function mount(app, [gameId]) {
     });
   }
 
-  async function loadSecret() {
-    if (!st.current || secretFor === st.current.id) return;
-    secretFor = st.current.id;
-    const { data } = await sb.from('round_secrets').select('solution,explanation').eq('round_id', st.current.id).maybeSingle();
-    secret = data;
-  }
-
   function drawRound() {
     const g = st.game, cur = st.current, ph = phase(cur, serverNow());
     const c = counts(st), s = cfg();
@@ -107,8 +102,10 @@ export async function mount(app, [gameId]) {
     } else if (cur) {
       h += `<div class="b">Round ${cur.round_no}: ${esc(cur.title)} <span class="badge ok">Closed</span></div>`;
     }
-    if (cur && secret && ph !== 'cancelled') {
-      h += `<div class="callout brand mt-2"><b>Answer (host only):</b> ${esc(secret.solution.suspect)} · ${esc(secret.solution.weapon)} · ${esc(secret.solution.location)}</div>`;
+    if (cur && cur.revealed && cur.reveal) {
+      h += `<div class="callout ok mt-2"><b>Answer:</b> ${esc(cur.reveal.solution.suspect)} · ${esc(cur.reveal.solution.weapon)} · ${esc(cur.reveal.solution.location)}</div>`;
+    } else if (cur && ph !== 'cancelled') {
+      h += `<p class="muted sm mt-2">The answer stays hidden from everyone, including you, until you reveal it.</p>`;
     }
     if (cur && ph !== 'cancelled') {
       h += `<div class="flex wrapf mt-2">${ph === 'live' ? `<button class="btn danger sm" id="stop">${icon('stop', 14)} Stop round</button>` : ''}
@@ -166,11 +163,7 @@ export async function mount(app, [gameId]) {
     const rows = standings(st);
     $('#board').innerHTML = `<div class="card flush"><div class="card-h"><h3>${icon('trophy', 17)} Scoreboard</h3>
       <button class="btn sm sec" id="csv"${rows.length ? '' : ' disabled'}>${icon('download', 15)} Export CSV</button></div>
-      <div class="tw"><table class="data"><thead><tr><th>#</th><th>Team</th>${st.rounds.map((r) => `<th title="${esc(r.title)}">R${r.round_no}</th>`).join('')}<th class="num">Total</th></tr></thead>
-      <tbody>${rows.map((x, i) => `<tr><td>${i + 1}</td><td class="b">${esc(x.team.name)}</td>${st.rounds.map((r) => {
-        const v = x.byRound[r.id];
-        return `<td>${v ? `${v.score}${v.solved ? ' ✓' : v.done ? '' : ' …'}` : '–'}</td>`;
-      }).join('')}<td class="num b">${x.total}</td></tr>`).join('') || `<tr><td colspan="${3 + st.rounds.length}" class="muted">No teams yet.</td></tr>`}</tbody></table></div></div>`;
+      ${scoreboardHtml(st)}</div>`;
     const csv = $('#csv');
     if (csv) csv.onclick = () => {
       const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
@@ -181,14 +174,17 @@ export async function mount(app, [gameId]) {
     };
   }
 
-  const sig = (x) => JSON.stringify([x.game, x.teams, x.rounds, x.results]);
+  function drawFeed() {
+    $('#feed').innerHTML = `<div class="card flush"><div class="card-h"><h3>${icon('flag', 17)} Live activity</h3></div>${feedHtml(st.feed)}</div>`;
+  }
+
+  const sig = (x) => JSON.stringify([x.game, x.teams, x.rounds, x.results, x.feed]);
   async function refresh(force = true) {
     prev = st;
     st = await loadState(gameId);
     if (!force && sig(prev) === sig(st)) return;
-    newSolves(prev, st).slice(0, 1).forEach(flash);
-    await loadSecret();
-    drawHdr(); drawInvite(); drawRound(); drawBoard();
+    newSolves(prev, st).slice(0, 1).forEach((n) => toast(`${n} just cracked the case!`));
+    drawHdr(); drawInvite(); drawRound(); drawBoard(); drawFeed();
   }
 
   let lastPh = '';
@@ -211,9 +207,8 @@ export async function mount(app, [gameId]) {
     }
   }, 250);
 
-  await loadSecret();
   lastPh = phase(st.current, serverNow());
-  drawHdr(); drawInvite(); drawSettings(); drawRound(); drawBoard();
+  drawHdr(); drawInvite(); drawSettings(); drawRound(); drawBoard(); drawFeed();
   const unsub = subscribe(gameId, () => refresh(false).catch(() => {}));
   return () => { clearInterval(timer); unsub(); };
 }

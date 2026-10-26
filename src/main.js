@@ -1,5 +1,5 @@
 import './style.css';
-import { configured } from './supabase.js';
+import { configured, setMode } from './supabase.js';
 import { esc, topbar } from './ui.js';
 
 const routes = [
@@ -34,6 +34,7 @@ async function route() {
   for (const [re, load] of routes) {
     const m = path.match(re);
     if (!m) continue;
+    setMode(/^\/admin/.test(path) ? 'host' : 'player');   // board.js picks its own mode
     app.innerHTML = topbar() + '<main class="wrap"><p class="muted">Loading…</p></main>';
     try {
       const mod = await load();

@@ -1,6 +1,7 @@
 import { sb, whoAmI, syncClock, serverNow } from '../supabase.js';
 import { esc, topbar, $, guard, toast, fmtTime, flash, copyText, icon, badge, showGetReady, hideGetReady } from '../ui.js';
-import { loadState, loadContent, standings, subscribe, newSolves, leaderboardHtml, rosterHtml, counts, phase } from '../data.js';
+import { loadState, loadContent, standings, subscribe, newSolves, leaderboardHtml, rosterHtml, counts, phase, feedHtml, podiumHtml, awardsHtml } from '../data.js';
+import { mountAvatarPicker, sanitize } from '../avatars.js';
 import { caseHtml } from '../puzzles.js';
 import { gridHtml, emptyGrid, nextMark, legendHtml, MARK } from '../grid.js';
 
@@ -10,10 +11,7 @@ export async function mount(app, [gameId]) {
     app.innerHTML = topbar() + `<main class="wrap"><div class="narrow"><div class="card center"><h2>You’re not on a team yet</h2>
       <p class="muted mt-2">Open the join link your host sent you to create a team or join one.</p><a class="btn sec" href="#/">Back</a></div></div></main>`;
   };
-  if (!user || role === 'admin') {
-    if (role === 'admin') { location.hash = '#/board/' + gameId; return; }
-    return notJoined();
-  }
+  if (!user) return notJoined();
   await syncClock();
 
   let st;
@@ -24,17 +22,18 @@ export async function mount(app, [gameId]) {
   const { data: sec } = await sb.from('team_secrets').select('code').eq('team_id', me.id).maybeSingle();
   const code = sec?.code || '';
 
-  let prev = st, attempts = [], content = null, contentFor = null, closing = false, lastSig = '', lastPh = '';
+  let prev = st, attempts = [], hints = [], content = null, contentFor = null, closing = false, lastSig = '', lastPh = '';
   const keys = { puzzle: '', form: '' };
 
   app.innerHTML = topbar(`<span class="badge brand">${icon('users', 13)} ${esc(me.name)}</span>`) + `
     <main class="wrap">
-      <div id="banner"></div>
+      <div id="banner"></div><div id="finale"></div>
       <div id="game" class="hidden"><div class="cols play">
         <div class="stack"><div id="puzzle"></div><div id="grid"></div></div>
         <div class="stack side"><div id="panel"></div><div id="form"></div></div></div></div>
       <div id="lobby" class="hidden"></div>
-      <div class="card flush mt"><div class="card-h"><h3>${icon('trophy', 17)} Leaderboard</h3></div><div id="lb"></div></div>
+      <div class="cols even mt"><div class="card flush"><div class="card-h"><h3>${icon('trophy', 17)} Leaderboard</h3></div><div id="lb"></div></div>
+        <div class="card flush"><div class="card-h"><h3>${icon('flag', 17)} Live activity</h3></div><div id="feed"></div></div></div>
     </main>`;
 
   const myMember = () => st.teams.flatMap((t) => t.team_members).find((m) => m.user_id === user.id);
@@ -65,7 +64,21 @@ export async function mount(app, [gameId]) {
       ${rosterHtml(st, { meId: user.id })}
       <div class="flex wrapf mt">
         <button class="btn ${mm?.ready ? 'sec' : ''}" id="rdy">${mm?.ready ? icon('check', 16) + ' You’re ready. Tap to undo' : 'I’m ready'}</button>
-        <span class="muted sm">Tell the host you’re set. It doesn’t start the game.</span></div></div>`;
+        <button class="btn sec" id="eav">Edit my avatar</button>
+        <span class="muted sm">Tell the host you’re set. It doesn’t start the game.</span></div>
+      <div id="avbox" class="hidden mt"></div></div>`;
+    $('#eav').onclick = () => {
+      const box = $('#avbox'); const open = box.classList.toggle('hidden') === false;
+      if (open && !box.firstChild) {
+        const mine = myMember();
+        const pk = mountAvatarPicker(box, sanitize(mine?.avatar), async (c) => {
+          const { error } = await sb.rpc('set_avatar', { p_game: gameId, p_avatar: c });
+          if (error) return toast(error.message, true);
+          try { localStorage.setItem('cc_avatar', JSON.stringify(c)); } catch { /* ignore */ }
+        });
+        void pk;
+      }
+    };
     guard($('#rdy'), async () => {
       const { error } = await sb.rpc('set_ready', { p_game: gameId, p_ready: !mm?.ready });
       if (error) throw new Error(error.message);
@@ -83,7 +96,7 @@ export async function mount(app, [gameId]) {
     const r = st.current;
     if (!content) { $('#puzzle').innerHTML = `<div class="card"><p class="muted">Opening the case file…</p></div>`; return; }
     $('#puzzle').innerHTML = `<div class="card"><div class="case-title"><h2>${esc(r.title)}</h2>${badge('brand', 'Round ' + r.round_no)}</div>
-      ${caseHtml(content, esc)}
+      ${caseHtml(content, esc, new Set(hints.map((h) => h.value)))}
       ${r.revealed && r.reveal ? `<div class="callout ok mt"><b>Answer:</b> ${esc(r.reveal.solution.suspect)} with the ${esc(r.reveal.solution.weapon)} in the ${esc(r.reveal.solution.location)}
         <p class="sm" style="margin:6px 0 0;color:var(--ink)">${esc(r.reveal.explanation || '')}</p></div>` : ''}</div>`;
   }
@@ -110,6 +123,8 @@ export async function mount(app, [gameId]) {
   function drawPanel() {
     const r = st.current, res = myResult(), p = ph();
     if (!r) return;
+    const maxHints = r.settings.max_hints ?? 2, hintCost = r.settings.hint_cost ?? 15;
+    const solvedCount = st.results.filter((x) => x.round_id === r.id && x.solved).length;
     const hist = attempts.length ? `<ul class="hist">${attempts.map((a, i) =>
       `<li><span>Try ${i + 1}: ${esc(a.answer.suspect)}, ${esc(a.answer.weapon)}, ${esc(a.answer.location)}</span>
        <b style="color:${a.correct_count === 3 ? 'var(--ok)' : 'var(--muted)'}">${a.correct_count}/3</b></li>`).join('')}</ul>` : '';
@@ -120,7 +135,23 @@ export async function mount(app, [gameId]) {
       <div class="flex between mt"><span class="muted sm">Attempts</span><b>${res.attempts} / ${r.settings.max_attempts}</b></div>
       ${res.solved ? `<div class="callout ok mt-2"><b>Solved! +${res.score} points</b></div>`
         : res.done ? `<div class="callout warn mt-2"><b>Finished.</b> ${res.score} points</div>` : ''}
-      ${hist}</div>`;
+      ${hist}
+      <div class="race"><span class="muted">Teams that solved it</span><b>${solvedCount} of ${st.teams.length}</b></div>
+      <div class="dots-row mt-2">${st.teams.map((t) => `<i class="${st.results.some((x) => x.round_id === r.id && x.team_id === t.id && x.solved) ? 'on' : ''}" title="${esc(t.name)}"></i>`).join('')}</div>
+      ${solvedCount && !res.done && p === 'live' ? `<p class="muted xs mt-2">Another team has solved it, but the round is still open. You can still earn points until the timer ends.</p>` : ''}
+      ${maxHints ? `<div class="mt" style="border-top:1px solid var(--line);padding-top:12px">
+        <div class="flex between"><b>${icon('book', 15)} Detective hints</b><span class="muted sm">${hints.length} / ${maxHints} used</span></div>
+        <div class="hint-list">${hints.map((h) => `<div class="hint">${icon('x', 14)} <span><b>${esc(h.value)}</b> is not the ${esc(h.kind)}</span></div>`).join('')}</div>
+        ${p === 'live' && !res.done && hints.length < maxHints
+          ? `<button class="btn sec sm block mt-2" id="hint">Buy a hint (−${hintCost} points)</button>` : ''}</div>` : ''}
+      </div>`;
+    guard($('#hint'), async () => {
+      if (!confirm(`Buy a hint? It rules out one wrong answer and costs ${hintCost} points from this round.`)) return;
+      const { data, error } = await sb.rpc('use_hint', { p_round: r.id });
+      if (error) throw new Error(error.message);
+      toast(`Hint: ${data.value} is not the ${data.kind}.`);
+      await refresh(true);
+    });
     tick();
   }
 
@@ -151,7 +182,12 @@ export async function mount(app, [gameId]) {
     });
   }
 
-  function drawLb() { $('#lb').innerHTML = leaderboardHtml(standings(st), me.id); }
+  function drawLb() {
+    $('#lb').innerHTML = leaderboardHtml(standings(st), me.id);
+    $('#feed').innerHTML = feedHtml(st.feed);
+    $('#finale').innerHTML = st.game.status === 'finished'
+      ? `<div class="card mb center"><div class="eyebrow">Game over</div><h2 style="margin:4px 0 6px">Final standings</h2>${podiumHtml(st)}</div>${awardsHtml(st) ? `<div class="card mb"><h3 class="mb">Awards</h3>${awardsHtml(st)}</div>` : ''}` : '';
+  }
 
   async function ensureContent() {
     const r = st.current, p = ph();
@@ -168,12 +204,11 @@ export async function mount(app, [gameId]) {
     $('#lobby').classList.toggle('hidden', finished || p === 'live');
     drawBanner();
     if (!finished && p !== 'live') drawLobby();
-    if (finished) { $('#banner').insertAdjacentHTML('afterbegin', `<div class="callout brand mb"><b>Game over.</b> Thanks for playing. Final standings are below.</div>`); }
     drawLb();
     if (!showGame) { keys.puzzle = keys.form = ''; return; }
     drawPanel();
-    const pk = r.id + '|' + r.revealed + '|' + (content ? 1 : 0);
-    const fk = [r.id, r.status, myResult().done, attempts.length, p, content ? 1 : 0].join('|');
+    const pk = r.id + '|' + r.revealed + '|' + (content ? 1 : 0) + '|' + hints.length;
+    const fk = [r.id, r.status, myResult().done, attempts.length, p, content ? 1 : 0, hints.length].join('|');
     if (pk !== keys.puzzle) { keys.puzzle = pk; drawPuzzle(); drawGrid(); }
     if (fk !== keys.form) { keys.form = fk; drawForm(); }
   }
@@ -184,11 +219,17 @@ export async function mount(app, [gameId]) {
     if (st.current) {
       const { data } = await sb.from('attempts').select('answer,correct_count').eq('round_id', st.current.id).eq('team_id', me.id).order('id');
       attempts = data || [];
-    } else attempts = [];
-    const sig = JSON.stringify([st.game, st.teams, st.rounds, st.results, attempts, ph()]);
+      const hh = await sb.from('hints').select('kind,value').eq('round_id', st.current.id).eq('team_id', me.id).order('id');
+      hints = hh.data || [];
+    } else { attempts = []; hints = []; }
+    const sig = JSON.stringify([st.game, st.teams, st.rounds, st.results, st.feed, attempts, hints, ph()]);
     if (!force && sig === lastSig) return;
     lastSig = sig;
-    newSolves(prev, st).slice(0, 1).forEach((n) => { if (n !== me.name) flash(n); });
+    newSolves(prev, st).forEach((n) => {
+      if (n === me.name) return;
+      const r = st.current, left = r ? (new Date(r.ends_at).getTime() - serverNow()) / 1000 : 0;
+      toast(`${n} cracked the case! You still have ${fmtTime(left)}. Keep going.`);
+    });
     await ensureContent();
     render();
   }

@@ -1,8 +1,9 @@
-import { whoAmI } from '../supabase.js';
+import { hostIdentity, playerIdentity } from '../supabase.js';
 import { esc, topbar, $, icon } from '../ui.js';
 
 export async function mount(app) {
-  const { user, role } = await whoAmI();
+  const [host, player] = await Promise.all([hostIdentity(), playerIdentity()]);
+  const role = host.role, user = player.user;
   const last = localStorage.getItem('cc_game');
   app.innerHTML = topbar(role === 'admin'
     ? `<a class="btn sm" href="#/admin">Host dashboard</a>`
@@ -18,9 +19,10 @@ export async function mount(app) {
       <div class="card">
         <h3 class="mb">${icon('door', 18)} Join a game</h3>
         <form id="jf"><label class="field"><span>Join link or code</span>
-          <input id="jc" autocomplete="off" required placeholder="Paste the link your host sent"></label>
+          <input id="jc" autocomplete="off" autocapitalize="none" required placeholder="Paste the link or the 8-letter code">
+          <small id="jerr" style="color:var(--red);font-weight:600;min-height:18px" role="alert"></small></label>
           <button class="btn lg block" type="submit">Continue</button></form>
-        ${last && user && role === 'team' ? `<p class="mt sm"><a href="#/play/${esc(last)}">Return to your last game</a></p>` : ''}
+        ${last && user && player.role === 'team' ? `<p class="mt sm"><a href="#/play/${esc(last)}">Return to your last game</a></p>` : ''}
         <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
         <p class="muted sm" style="margin:0">Running the game? <a href="#/admin/login">Sign in as host</a></p>
       </div>
@@ -33,9 +35,13 @@ export async function mount(app) {
   </main>`;
   $('#jf').onsubmit = (e) => {
     e.preventDefault();
-    const v = $('#jc').value.trim();
-    const code = (v.match(/join\/([a-z0-9]+)/i) || [null, v])[1].replace(/[^a-z0-9]/gi, '');
-    if (code.length < 4) return;
-    location.hash = '#/join/' + code.toLowerCase();
+    const raw = $('#jc').value.trim();
+    const m = raw.match(/join\/([a-z0-9]+)/i);
+    const code = (m ? m[1] : raw).replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const err = (t) => { $('#jerr').textContent = t; $('#jc').focus(); };
+    if (!code) return err('Paste the link or code your host gave you.');
+    if (!m && code.length === 5) return err('That looks like a team code. Open your host’s join link first, then choose “Join my team” and enter it there.');
+    if (!m && code.length !== 8) return err('A game code has 8 characters. Check it, or paste the whole join link.');
+    location.hash = '#/join/' + code;
   };
 }

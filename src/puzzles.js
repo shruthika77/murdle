@@ -50,9 +50,9 @@ export async function importPuzzles(text, ownerId) {
 }
 
 /** Case-file body: story, suspects / weapons / locations and clues. */
-export function caseHtml(c, esc) {
+export function caseHtml(c, esc, ruled = new Set()) {
   const col = (label, ic, list) => `<div><h4>${icon(ic, 14)} ${label}</h4>${list.map((s) =>
-    `<div class="ent"><b>${esc(s.name)}</b><span>${esc(s.trait || s.description || '')}</span></div>`).join('')}</div>`;
+    `<div class="ent${ruled.has(s.name) ? ' ruled' : ''}"><b>${esc(s.name)}</b><span>${esc(s.trait || s.description || '')}</span></div>`).join('')}</div>`;
   return `<p class="story">${esc(c.story)}</p>
     <div class="trio">${col('Suspects', 'user', c.suspects)}${col('Weapons', 'weapon', c.weapons)}${col('Locations', 'pin', c.locations)}</div>
     <h3 class="mt" style="margin-bottom:6px">Clues</h3><ol class="clues">${c.clues.map((x) => `<li><span>${esc(x)}</span></li>`).join('')}</ol>`;

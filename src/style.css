@@ -210,6 +210,57 @@ body.projector .score{font-size:40px}
 body.projector .lb-row{padding:18px 24px}
 body.projector .rank{width:44px;height:44px;font-size:18px}
 
+/* ===== Avatars, picker ===== */
+.av.img{background:none;overflow:hidden;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line)}
+.av.img svg{display:block;width:100%;height:100%}
+.av-stack{display:inline-flex;align-items:center}
+.av-stack .av{margin-left:-9px}.av-stack .av:first-child{margin-left:0}
+.av.more{background:var(--surface-2);color:var(--muted);border:2px solid var(--surface);font-size:11px}
+.picker{display:grid;grid-template-columns:150px 1fr;gap:18px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--surface-2)}
+.pk-prev{text-align:center}.pk-face{width:120px;height:120px;border-radius:50%;overflow:hidden;margin:0 auto 10px;border:3px solid var(--surface);box-shadow:0 0 0 1px var(--line-strong),var(--shadow)}
+.pk-face svg{display:block}
+.pk-row{display:flex;align-items:center;gap:8px;margin:7px 0;min-height:34px}
+.pk-l{width:84px;font-size:12px;font-weight:600;color:var(--muted)}
+.pk-v{flex:1;text-align:center;font-size:13px;font-weight:600}
+.pk-b{min-width:34px;padding:0}
+.pk-dots{display:flex;gap:4px;flex-wrap:wrap}
+.pk-dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line-strong);cursor:pointer;padding:0;min-height:0}
+.pk-dot.on{box-shadow:0 0 0 2px var(--brand)}
+@media(max-width:520px){.picker{grid-template-columns:1fr}.pk-l{width:76px}}
+
+/* ===== Feed, hints, awards, podium ===== */
+.feed{list-style:none;margin:0;padding:0}
+.fe{display:flex;gap:10px;align-items:flex-start;padding:10px 20px;border-bottom:1px solid var(--line);font-size:14px}
+.fe:last-child{border-bottom:0}.fe .fi{color:var(--muted);margin-top:2px}
+.fe.k-solved .fi{color:var(--ok)}.fe.k-round_start .fi{color:var(--brand)}.fe.k-out .fi{color:var(--red)}
+.hint-list{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.hint{display:flex;gap:8px;align-items:center;font-size:13px;padding:8px 10px;border-radius:10px;background:var(--warn-soft);color:var(--warn)}
+.hint b{color:var(--ink)}
+.ent.ruled{opacity:.45;text-decoration:line-through}
+.awards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.award{display:flex;gap:12px;align-items:center;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.award .ai{font-size:30px;width:48px;height:48px;border-radius:50%;background:var(--warn-soft);display:grid;place-items:center;flex:none}
+.podium{display:flex;align-items:flex-end;justify-content:center;gap:12px;margin:10px 0 6px}
+.pd{flex:1;max-width:220px;text-align:center}
+.pd-who{margin-bottom:8px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.pd-block{border-radius:12px 12px 0 0;display:grid;place-items:center;font:700 34px var(--display);color:#fff}
+.pd.p1 .pd-block{height:130px;background:linear-gradient(#e0b93c,#b8921c)}
+.pd.p2 .pd-block{height:96px;background:linear-gradient(#aab3bf,#848e9b)}
+.pd.p3 .pd-block{height:70px;background:linear-gradient(#cf9565,#a87345)}
+.race{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-top:10px}
+.dots-row{display:flex;gap:5px}.dots-row i{width:10px;height:10px;border-radius:50%;background:var(--line-strong)}.dots-row i.on{background:var(--ok)}
+
+/* ===== Scoreboard table extras ===== */
+table.data .num.livecol,table.data th.livecol{background:color-mix(in srgb,var(--red-soft) 40%,transparent)}
+table.data tr.toprow td{background:color-mix(in srgb,var(--warn-soft) 55%,transparent)}
+table.data .okc{color:var(--ok)}
+table.data .score{font-size:20px}
+table.data.big{font-size:18px}table.data.big td{padding:14px}table.data.big .score{font-size:30px}
+.spoiler summary{cursor:pointer;font-weight:600;color:var(--brand);margin-top:8px}
+.case-proj .story{font-size:22px}
+body.projector .case-proj .ent b{font-size:17px}
+body.projector .case-proj .clues li{font-size:19px}
+
 /* ===== Small screens ===== */
 .wrapf>.grow{flex:1 1 200px}
 @media(max-width:940px){

@@ -1,3 +1,5 @@
+import { avatarSvg } from './avatars.js';
+
 export const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const $ = (sel, root = document) => root.querySelector(sel);
@@ -36,10 +38,22 @@ export const badge = (kind, text) => `<span class="badge ${kind}">${text}</span>
 export const statusBadge = (s) =>
   s === 'active' ? badge('live', 'In play') : s === 'finished' ? badge('ok', 'Finished') : badge('', 'Lobby');
 
-export function avatar(name, big = false) {
+export function avatar(name, big = false, cfg = null) {
+  if (cfg) return `<span class="av img${big ? ' lg' : ''}">${avatarSvg(cfg, big ? 40 : 30)}</span>`;
   let h = 0; for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) % 360;
   const ini = String(name).trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase();
   return `<span class="av${big ? ' lg' : ''}" style="--h:${h}" aria-hidden="true">${esc(ini || '?')}</span>`;
+}
+
+/** Overlapping avatars for a team (max 3 shown). */
+export function avatarStack(members, big = false) {
+  const shown = members.slice(0, 3);
+  return `<span class="av-stack">${shown.map((m) => avatar(m.player_name, big, m.avatar)).join('')}${members.length > 3 ? `<span class="av more">+${members.length - 3}</span>` : ''}</span>`;
+}
+
+export function ago(iso) {
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  return s < 10 ? 'just now' : s < 60 ? Math.floor(s) + 's ago' : s < 3600 ? Math.floor(s / 60) + 'm ago' : Math.floor(s / 3600) + 'h ago';
 }
 
 /** Page header. `right` is extra HTML (buttons / user info). */
@@ -58,10 +72,11 @@ export function toast(msg, bad = false) {
   setTimeout(() => t.remove(), bad ? 6000 : 3500);
 }
 
+/** Big celebration (own team, or projector). */
 export function flash(teamName) {
   const f = document.getElementById('flash');
   f.innerHTML = `<div class="flash"><div><div class="s">Case solved</div><div class="t">The culprit is found</div><div class="n">${esc(teamName)}</div></div></div>`;
-  setTimeout(() => (f.innerHTML = ''), 4000);
+  setTimeout(() => (f.innerHTML = ''), 3200);
 }
 
 /* ---------- get-ready overlay (shared by players and the projector) ---------- */

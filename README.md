@@ -63,7 +63,34 @@ The anon key is meant to be public. Security comes from Row Level Security and t
 4. **Play.** The round timer starts. Teams read the case and use the connected Murdle-style deduction grid.
 5. **Finish.** The round closes on time-out, when the host stops it, or when teams finish. The host can reveal the answer.
 
+## Features that make it different
+
+- **Waiting room and countdown:** live lobby, ready buttons, host-triggered start and a get-ready countdown on every screen.
+- **Cartoon detective avatars:** every player builds one when joining (background, skin, hair, eyes, mouth, accessory).
+- **Murdle-style deduction grid:** one connected grid with shared headers, saved on the device.
+- **Detective hints:** a team can buy up to N hints per round. Each truthfully rules out one wrong suspect, weapon or
+  location (it is struck out in the case file) and costs points. Both numbers are host settings.
+- **Live activity feed:** joins, round starts, "2 of 3 correct" teasers, hints and solves appear for everyone, which
+  makes the room feel like a race.
+- **Race-friendly rounds:** when one team solves, the others keep playing until the timer ends. Others get a small
+  notice instead of a takeover.
+- **Projector view:** the case file for the whole room, a scoreboard with every round's score, the feed, then a podium
+  and awards (Speed Demon, Sharpshooter, Master Detective, Cliffhanger) at the end. The answer stays hidden, even from
+  the host, until "Reveal answer" is pressed.
+- **Separate host and player sessions:** a host can open a join link in another tab of the same browser and play.
+
 ## Updating an existing project
+
+Run the migrations you haven't applied yet, in order: `migration_002_lobby_countdown.sql`, then
+`migration_003_avatars_hints_feed.sql`. Fresh projects just run `supabase/schema.sql` (it includes both).
+
+## Sample puzzles
+
+`supabase/sample_puzzles.json` has 13 puzzles (`case-001` to `case-003`, `extra-01` to `extra-10`). The 10 extra ones
+were generated with a solver that confirms each has exactly one crime-scene answer. In *Puzzle library* use
+**Add the 13 sample puzzles**; existing puzzles with other ids are never touched.
+
+## Old notes
 
 If you already ran an older `schema.sql`, run only `supabase/migration_002_lobby_countdown.sql` in the SQL editor.
 Fresh projects just run `supabase/schema.sql` (it now includes the migration).

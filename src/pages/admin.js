@@ -75,13 +75,14 @@ export async function mount(app) {
         <input type="file" id="pf" accept=".json,application/json" aria-label="Puzzle JSON file">
         <textarea id="pt" class="mt-2" placeholder="Paste puzzle JSON here" aria-label="Puzzle JSON"></textarea>
         <div class="flex wrapf mt-2"><button class="btn" id="imp">Import puzzles</button>
-          <button class="btn sec" id="samples">Add the 3 sample puzzles</button>
+          <button class="btn sec" id="samples">Add the 13 sample puzzles</button>
           <button class="btn sec" id="exp"${puzzles.length ? '' : ' disabled'}>${icon('download', 15)} Export library</button></div></div>
       <div class="card flush">${puzzles.length ? puzzles.map((p) => `
         <div class="item" style="align-items:flex-start"><div class="grow"><div class="b">${esc(p.title)} <span class="muted sm">${esc(p.slug)}</span></div>
           ${open.has(p.id) ? `<div class="callout mt-2">${caseHtml(p.content, esc)}
-            <div class="callout ok mt-2"><b>Answer:</b> ${esc(p.solution.suspect)} · ${esc(p.solution.weapon)} · ${esc(p.solution.location)}</div>
-            <p class="sm mt-2">${esc(p.explanation || '')}</p></div>` : ''}</div>
+            <details class="spoiler"><summary>Show answer (spoiler)</summary>
+              <div class="callout ok mt-2"><b>Answer:</b> ${esc(p.solution.suspect)} · ${esc(p.solution.weapon)} · ${esc(p.solution.location)}</div>
+              <p class="sm mt-2">${esc(p.explanation || '')}</p></details></div>` : ''}</div>
           <button class="btn sm sec" data-prev="${p.id}">${icon('eye', 15)} ${open.has(p.id) ? 'Hide' : 'Preview'}</button>
           <button class="btn sm ghost" data-delp="${p.id}" aria-label="Delete puzzle">${icon('trash', 16)}</button></div>`).join('')
         : `<div class="empty">${icon('book', 28)}<p class="mt-2">Your library is empty. Add the sample puzzles to try the game.</p></div>`}</div>`;
