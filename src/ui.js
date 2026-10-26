@@ -1,4 +1,6 @@
 import { avatarSvg } from './avatars.js';
+import { soundOn, setSound, sfx } from './sfx.js';
+import { confetti } from './fx.js';
 
 export const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -56,11 +58,21 @@ export function ago(iso) {
   return s < 10 ? 'just now' : s < 60 ? Math.floor(s) + 's ago' : s < 3600 ? Math.floor(s / 60) + 'm ago' : Math.floor(s / 3600) + 'h ago';
 }
 
-/** Page header. `right` is extra HTML (buttons / user info). */
+/** Page header. `right` is extra HTML (buttons / user info). A sound toggle is always included. */
 export function topbar(right = '') {
-  return `<header class="app-header"><div class="in">
-    <a class="site-brand" href="#/"><span class="logo">${icon('search', 18)}</span>Case Closed</a>${right}</div></header>`;
+  return `<header class="app-header"><div class="tape" aria-hidden="true"><span>${TAPE}${TAPE}</span></div>
+    <div class="in"><a class="site-brand" href="#/"><span class="logo">${BRAND}</span><span>Case <em>Closed</em></span></a>${right}
+    <button class="btn sm ghost snd" type="button" data-sound aria-pressed="${soundOn()}" aria-label="Sound effects" title="Sound effects">${soundOn() ? '🔊' : '🔇'}</button></div></header>`;
 }
+const TAPE = 'Crime scene &nbsp;✕&nbsp; do not cross &nbsp;✕&nbsp; '.repeat(6);
+const BRAND = `<svg viewBox="0 0 40 40" width="34" height="34" aria-hidden="true"><circle cx="17" cy="17" r="11" fill="#fff3b0" stroke="#141a2e" stroke-width="3.5"/>
+  <path d="M25 25L35 35" stroke="#141a2e" stroke-width="6" stroke-linecap="round"/><path d="M25 25L35 35" stroke="#e2384d" stroke-width="3" stroke-linecap="round"/>
+  <path d="M11 14Q13 10 17 10" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>`;
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-sound]'); if (!b) return;
+  setSound(!soundOn()); b.textContent = soundOn() ? '🔊' : '🔇'; b.setAttribute('aria-pressed', soundOn());
+  if (soundOn()) sfx.pop();
+});
 
 /* ---------- toasts / flash ---------- */
 export function toast(msg, bad = false) {
@@ -75,7 +87,8 @@ export function toast(msg, bad = false) {
 /** Big celebration (own team, or projector). */
 export function flash(teamName) {
   const f = document.getElementById('flash');
-  f.innerHTML = `<div class="flash"><div><div class="s">Case solved</div><div class="t">The culprit is found</div><div class="n">${esc(teamName)}</div></div></div>`;
+  f.innerHTML = `<div class="flash"><div class="burst"><div class="s">Case cracked!</div><div class="t">Gotcha!</div><div class="n">${esc(teamName)}</div></div></div>`;
+  sfx.solved(); confetti();
   setTimeout(() => (f.innerHTML = ''), 3200);
 }
 
@@ -85,17 +98,22 @@ export function showGetReady(left, total, title) {
   const root = document.getElementById('overlay');
   if (!root.firstChild) {
     root.innerHTML = `<div class="ready-overlay" role="alert"><div class="ready-card">
-      <div class="eyebrow">Get ready</div><h2 id="gr-title"></h2>
+      <div class="gr-tag">Briefing in progress</div><h2 id="gr-title"></h2>
       <div class="ring"><svg viewBox="0 0 200 200"><circle class="bg" cx="100" cy="100" r="88"/>
         <circle class="fg" cx="100" cy="100" r="88" stroke-dasharray="${CIRC}" id="gr-ring"/></svg><div class="n" id="gr-n"></div></div>
-      <p>The case file opens when the clock reaches zero.</p></div></div>`;
+      <p>The case file opens when the clock reaches zero. Sharpen your pencils, detectives.</p></div></div>`;
   }
   $('#gr-title', root).textContent = title;
-  $('#gr-n', root).textContent = Math.max(0, Math.ceil(left));
+  const n = Math.max(0, Math.ceil(left)), el = $('#gr-n', root);
+  if (el.textContent !== String(n)) { el.textContent = n; if (n <= 3) sfx.beep(n === 0); }
   const frac = Math.min(1, Math.max(0, left / Math.max(total, 1)));
   $('#gr-ring', root).style.strokeDashoffset = String(CIRC * (1 - frac));
 }
-export function hideGetReady() { document.getElementById('overlay').innerHTML = ''; }
+/** Removes the countdown. `go` plays the "case open" jingle (pass true when the round has just gone live). */
+export function hideGetReady(go = false) {
+  const o = document.getElementById('overlay');
+  if (o.firstChild) { o.innerHTML = ''; if (go) sfx.start(); }
+}
 
 /* ---------- misc ---------- */
 export function fmtTime(sec) {

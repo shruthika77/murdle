@@ -1,5 +1,6 @@
 import { sb, client } from './supabase.js';
 import { debounce, esc, avatar, avatarStack, icon, ago, fmtTime } from './ui.js';
+import { rankFor } from './themes.js';
 
 const must = (r) => { if (r.error) throw new Error(r.error.message); return r.data; };
 
@@ -106,28 +107,47 @@ export function leaderboardHtml(rows, meTeamId = null) {
       <div class="rank${x.total > 0 ? " r" + (i + 1) : ""}">${i + 1}</div>
       ${avatarStack(x.team.team_members)}
       <div class="grow"><div class="b">${esc(x.team.name)}${x.team.id === meTeamId ? ' <span class="badge brand">You</span>' : ''}</div>
-        <div class="muted sm">${esc(x.team.team_members.map((m) => m.player_name).join(', '))}</div></div>
+        <div class="muted sm"><span class="rank-t">${rankFor(x.total)}</span> · ${esc(x.team.team_members.map((m) => m.player_name).join(', '))}</div></div>
       <div class="muted sm">${x.solved} solved</div>
       <div class="score">${x.total}</div>
     </div>`).join('');
 }
 
-/** Per-round scoreboard table (host console and projector). */
-export function scoreboardHtml(st, { big = false } = {}) {
-  const rows = standings(st);
-  const live = st.current && st.current.status === 'live' ? st.current.id : null;
-  if (!rows.length) return `<div class="empty">No teams yet.</div>`;
-  return `<div class="tw"><table class="data${big ? ' big' : ''}"><thead><tr><th>#</th><th>Team</th>
-    ${st.rounds.map((r) => `<th class="num${r.id === live ? ' livecol' : ''}" title="${esc(r.title)}">R${r.round_no}${r.id === live ? ' <span class="badge live">live</span>' : ''}</th>`).join('')}
+/** One team's status in the current round, for the "This round" column. */
+function roundCell(st, team, r, ph) {
+  const v = st.results.find((x) => x.round_id === r.id && x.team_id === team.id);
+  const max = r.settings?.max_attempts ?? 3;
+  if (v?.solved) return { sort: 2e6 + v.score, html: `<span class="rc ok"><b>+${v.score}</b><small>Solved in ${fmtTime(v.solve_seconds || 0)}${v.attempts > 1 ? ` · ${v.attempts} tries` : ' · first try'}</small></span>` };
+  if (v?.done) return { sort: 1e6 + v.score, html: `<span class="rc out"><b>${v.score ? '+' + v.score : '0'}</b><small>${v.attempts >= max ? 'Out of attempts' : 'Time ran out'}${v.best_correct ? ` · best ${v.best_correct}/3` : ''}</small></span>` };
+  if (ph === 'live') return { sort: (v?.best_correct || 0) * 10 - (v?.attempts || 0), html: `<span class="rc live"><b class="dots" aria-hidden="true"><i></i><i></i><i></i></b><small>Investigating${v?.attempts ? ` · ${v.attempts}/${max} tries · best ${v.best_correct}/3` : ''}</small></span>` };
+  if (ph === 'countdown') return { sort: 0, html: '<span class="rc"><small>Getting ready</small></span>' };
+  return { sort: 0, html: '<span class="rc"><b>0</b><small>No answer</small></span>' };
+}
+
+/**
+ * Scoreboard used by both the host console and the projector:
+ * rank, team, a big "This round" column with each team's live round score, earlier rounds, total.
+ * sortBy: 'total' (default) or 'round'.
+ */
+export function scoreboardHtml(st, { big = false, sortBy = 'total', phaseNow = null } = {}) {
+  let rows = standings(st);
+  if (!rows.length) return `<div class="empty">${icon('users', 28)}<p class="mt-2">No teams yet. They appear here as soon as they join.</p></div>`;
+  const cur = st.current && phaseNow !== 'cancelled' ? st.current : null;
+  const others = st.rounds.filter((r) => !cur || r.id !== cur.id);
+  const cells = new Map(rows.map((x) => [x.team.id, cur ? roundCell(st, x.team, cur, phaseNow) : null]));
+  if (cur && sortBy === 'round') rows = [...rows].sort((a, b) => cells.get(b.team.id).sort - cells.get(a.team.id).sort);
+  const curTotal = (x) => (cur ? (x.byRound[cur.id]?.score || 0) : 0);
+  return `<div class="tw"><table class="data sb${big ? ' big' : ''}"><thead><tr><th>#</th><th>Team</th>
+    ${cur ? `<th class="thisr">Round ${cur.round_no}${phaseNow === 'live' ? ' <span class="badge live">live</span>' : ''}<div class="xs muted">${esc(cur.title)}</div></th>` : ''}
+    ${others.map((r) => `<th class="num" title="${esc(r.title)}">R${r.round_no}</th>`).join('')}
     <th class="num">Total</th></tr></thead><tbody>
-    ${rows.map((x, i) => `<tr class="${i === 0 && x.total > 0 ? 'toprow' : ''}"><td><span class="rank${x.total > 0 ? ' r' + (i + 1) : ''}">${i + 1}</span></td>
-      <td><div class="flex gap-1">${avatarStack(x.team.team_members)}<span class="b">${esc(x.team.name)}</span></div></td>
-      ${st.rounds.map((r) => {
-        const v = x.byRound[r.id];
-        const cell = !v ? '–' : v.solved ? `<b class="okc">${v.score}</b> <span class="muted xs">${fmtTime(v.solve_seconds || 0)}</span>` : v.done ? `${v.score}` : `<span class="muted">…</span>`;
-        return `<td class="num${r.id === live ? ' livecol' : ''}">${cell}</td>`;
-      }).join('')}
-      <td class="num score">${x.total}</td></tr>`).join('')}
+    ${rows.map((x, i) => `<tr class="${i === 0 && (sortBy === 'round' ? cells.get(x.team.id)?.sort > 0 : x.total > 0) ? 'toprow' : ''}">
+      <td><span class="rank${(sortBy === 'round' || x.total > 0) ? ' r' + (i + 1) : ''}">${i + 1}</span></td>
+      <td><div class="flex gap-1">${avatarStack(x.team.team_members)}<div><div class="b">${esc(x.team.name)}</div><div class="xs rank-t">${rankFor(x.total)}</div></div></div></td>
+      ${cur ? `<td class="thisr">${cells.get(x.team.id).html}</td>` : ''}
+      ${others.map((r) => { const v = x.byRound[r.id];
+        return `<td class="num">${!v ? '<span class="muted">–</span>' : v.solved ? `<b class="okc">${v.score}</b>` : `${v.score}`}</td>`; }).join('')}
+      <td class="num score">${x.total}${cur && curTotal(x) ? `<div class="xs okc">+${curTotal(x)} this round</div>` : ''}</td></tr>`).join('')}
     </tbody></table></div>`;
 }
 
@@ -143,6 +163,7 @@ export function feedHtml(feed) {
       case 'out': return [icon('x', 15), `${t} used every attempt`];
       case 'solved': return [icon('trophy', 15), `${t} cracked the case in <b>${fmtTime(e.detail.seconds || 0)}</b> (+${e.detail.score})`];
       case 'hint': return [icon('book', 15), `${t} bought a detective hint`];
+      case 'revealed': return [icon('eye', 15), `The answer was revealed`];
       default: return [icon('flag', 15), esc(e.kind)];
     }
   };

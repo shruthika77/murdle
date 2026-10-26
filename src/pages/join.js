@@ -33,23 +33,25 @@ export async function mount(app, [code]) {
   const draw = () => {
     app.innerHTML = head + `<main class="wrap"><div class="narrow" style="padding-top:20px;max-width:560px">
       <div class="card">
-        <div class="eyebrow">You’re invited to</div><h2 class="mt-2 mb">${esc(game.title)}</h2>
+        <div class="invite-h"><span class="kicker">You’re invited to investigate</span><h2>${esc(game.title)}</h2></div>
         <div class="tabs" role="tablist" style="display:flex">
           <button class="grow" role="tab" id="t-new" aria-selected="${mode === 'new'}">Create a team</button>
           <button class="grow" role="tab" id="t-old" aria-selected="${mode === 'old'}">Join my team</button></div>
         <form id="f">
           ${mode === 'new'
-            ? `<label class="field"><span>Team name</span><input id="tn" maxlength="40" minlength="2" required autocomplete="off" placeholder="e.g. The Sleuth Squad"></label>`
+            ? `<label class="field"><span>Team name</span><div class="flex"><input id="tn" maxlength="40" minlength="2" required autocomplete="off" placeholder="e.g. The Sleuth Squad"><button type="button" class="btn sec" id="tnr" title="Suggest a team name" aria-label="Suggest a team name">🎲</button></div></label>`
             : `<label class="field"><span>Team code</span><input id="tc" maxlength="8" required autocomplete="off" style="text-transform:uppercase;letter-spacing:.2em" placeholder="ABC12">
                 <small>Ask a teammate. It’s shown at the top of their screen.</small></label>`}
           <label class="field"><span>Your name</span><input id="pn" maxlength="30" required value="${esc(saved)}" autocomplete="given-name"></label>
-          <div class="field"><span>Make your cartoon detective</span><div id="pk"></div></div>
+          <div class="field"><span>Your cartoon detective</span><div id="pk"></div></div>
           <button class="btn lg block" id="go" type="submit">${mode === 'new' ? 'Create team and enter lobby' : 'Join team'}</button>
         </form>
         <p class="muted sm mt">Teammates open this same link, choose “Join my team”, and enter the team code.
         If you lose your place, rejoin the same way.</p>
       </div></div></main>`;
-    const picker = mountAvatarPicker($('#pk'), avatar, (c) => { avatar = c; });
+    const picker = mountAvatarPicker($('#pk'), avatar, (c) => { avatar = c; }, { compact: true });
+    const tnr = $('#tnr');
+    if (tnr) tnr.onclick = () => { $('#tn').value = teamName(); };
     $('#t-new').onclick = () => { mode = 'new'; draw(); };
     $('#t-old').onclick = () => { mode = 'old'; draw(); };
     $('#f').onsubmit = async (e) => {
@@ -70,3 +72,7 @@ export async function mount(app, [code]) {
   };
   draw();
 }
+
+const A = ['Midnight', 'Velvet', 'Crimson', 'Foggy', 'Silent', 'Rusty', 'Lucky', 'Shadow', 'Golden', 'Rainy', 'Clever', 'Sneaky'];
+const B = ['Magnifiers', 'Gumshoes', 'Sleuths', 'Fedoras', 'Bloodhounds', 'Alibis', 'Inspectors', 'Footprints', 'Clue Hunters', 'Lanterns', 'Ravens', 'Detectives'];
+const teamName = () => `The ${A[Math.floor(Math.random() * A.length)]} ${B[Math.floor(Math.random() * B.length)]}`;

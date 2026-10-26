@@ -885,3 +885,16 @@ begin
 end $$;
 
 alter publication supabase_realtime add table public.activity, public.hints;
+
+-- ---------- 7. Avatar outfits (same as migration_004_avatar_outfits.sql) ----------
+create or replace function public.clean_avatar(a jsonb) returns jsonb
+language plpgsql immutable set search_path = pg_catalog as $$
+declare k text; r jsonb := '{}'::jsonb;
+begin
+  if a is null or jsonb_typeof(a) <> 'object' then return null; end if;
+  foreach k in array array['b','s','h','e','m','a','o'] loop
+    r := r || jsonb_build_object(k, case when (a->>k) ~ '^[0-9]$' then (a->>k)::int else 0 end);
+  end loop;
+  return r;
+end $$;
+revoke all on function public.clean_avatar(jsonb) from public, anon, authenticated;

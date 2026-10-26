@@ -1,5 +1,7 @@
 import { sb } from './supabase.js';
 import { icon } from './ui.js';
+import { suspectSvg } from './avatars.js';
+import { weaponIcon, placeIcon } from './themes.js';
 
 const isStr = (s, max) => typeof s === 'string' && s.trim().length > 0 && s.length <= max;
 
@@ -49,11 +51,21 @@ export async function importPuzzles(text, ownerId) {
   return rows.length;
 }
 
-/** Case-file body: story, suspects / weapons / locations and clues. */
+/**
+ * Case-file body: the story on a typed report, a suspect line-up with cartoon mugshots,
+ * evidence tags for weapons and locations, and numbered clue slips.
+ * `ruled` is a set of names struck out by detective hints.
+ */
 export function caseHtml(c, esc, ruled = new Set()) {
-  const col = (label, ic, list) => `<div><h4>${icon(ic, 14)} ${label}</h4>${list.map((s) =>
-    `<div class="ent${ruled.has(s.name) ? ' ruled' : ''}"><b>${esc(s.name)}</b><span>${esc(s.trait || s.description || '')}</span></div>`).join('')}</div>`;
-  return `<p class="story">${esc(c.story)}</p>
-    <div class="trio">${col('Suspects', 'user', c.suspects)}${col('Weapons', 'weapon', c.weapons)}${col('Locations', 'pin', c.locations)}</div>
-    <h3 class="mt" style="margin-bottom:6px">Clues</h3><ol class="clues">${c.clues.map((x) => `<li><span>${esc(x)}</span></li>`).join('')}</ol>`;
+  const r = (n) => (ruled.has(n) ? ' ruled' : '');
+  const suspects = c.suspects.map((s, i) => `<figure class="mug${r(s.name)}">
+      <div class="mug-pic"><div class="mug-h" aria-hidden="true"></div>${suspectSvg(s.name, 96)}<span class="mug-no">#${String(i + 1).padStart(2, '0')}</span></div>
+      <figcaption><b>${esc(s.name)}</b><span>${esc(s.trait || '')}</span></figcaption></figure>`).join('');
+  const tag = (x, ic) => `<div class="tag${r(x.name)}"><span class="tag-ic" aria-hidden="true">${ic(x.name)}</span>
+      <div><b>${esc(x.name)}</b><span>${esc(x.description || '')}</span></div></div>`;
+  return `<div class="dossier"><p class="story">${esc(c.story)}</p></div>
+    <h4 class="sec-h">${icon('user', 15)} The line-up</h4><div class="lineup">${suspects}</div>
+    <div class="evid"><div><h4 class="sec-h">${icon('weapon', 15)} Possible weapons</h4>${c.weapons.map((w) => tag(w, weaponIcon)).join('')}</div>
+      <div><h4 class="sec-h">${icon('pin', 15)} Possible scenes</h4>${c.locations.map((l) => tag(l, placeIcon)).join('')}</div></div>
+    <h4 class="sec-h">${icon('search', 15)} Clues</h4><ol class="clues">${c.clues.map((x) => `<li><span>${esc(x)}</span></li>`).join('')}</ol>`;
 }

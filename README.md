@@ -79,10 +79,36 @@ The anon key is meant to be public. Security comes from Row Level Security and t
   the host, until "Reveal answer" is pressed.
 - **Separate host and player sessions:** a host can open a join link in another tab of the same browser and play.
 
+## What's new in this version
+
+- **Projector shows the full round:** when the countdown ends, the projector shows the same case file and deduction grid
+  the teams see. The host can mark the grid there to walk the room through the logic. The answer stays sealed, for the
+  host too, until **Reveal answer** is pressed; then the answer squares are highlighted in gold. The host console shows
+  the case file and a host grid as well.
+- **One scoreboard everywhere:** the projector uses the host's scoreboard, with a **Round N** column showing each team's
+  live round score and status (solved, investigating, out of attempts), earlier rounds and the total. **Overall / This
+  round** switches the ranking.
+- **Cartoon avatars on create and join:** players pick a quick look, shuffle, or customise (backdrop, skin, hair, eyes,
+  mouth, gear, outfit). The host builds a lead-investigator avatar when creating a game; it appears on the projector.
+- **A new scene for every level:** eight cartoon settings (manor, harbour, stage, museum, kitchen, office, garden,
+  rainy city) are matched to each story, with their own colours.
+- **Mugshot line-up:** each suspect gets a cartoon mugshot generated from their name and role (a chef wears a chef's
+  hat, a captain a captain's cap).
+- **Smart deduction grid:** confirming a pair crosses out the rest of its row and column; a progress bar tracks marks.
+- **Reveal ceremony:** when the host reveals, evidence cards flip and a CASE CLOSED stamp lands on every screen.
+- **Detective notebook** per team and round, **detective ranks** (Rookie to Legend), a downloadable **case dossier**
+  image for each team at the end, synthesised **sound effects** with a mute button, and a heartbeat glow in the last
+  30 seconds.
+- **Bug fix:** the case text no longer gets stuck on "Opening the case file…" if it fails to load when the clock starts.
+
 ## Updating an existing project
 
-Run the migrations you haven't applied yet, in order: `migration_002_lobby_countdown.sql`, then
-`migration_003_avatars_hints_feed.sql`. Fresh projects just run `supabase/schema.sql` (it includes both).
+Run `supabase/migration_004_avatar_outfits.sql` once in the SQL editor so avatar outfits are saved. Without it the game
+still works, but every outfit shows as the trench coat.
+
+
+Run the migrations you haven't applied yet, in order: `migration_002_lobby_countdown.sql`,
+`migration_003_avatars_hints_feed.sql`, then `migration_004_avatar_outfits.sql`. Fresh projects just run `supabase/schema.sql` (it includes all of them).
 
 ## Sample puzzles
 

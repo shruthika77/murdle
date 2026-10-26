@@ -1,7 +1,12 @@
 import { sb, syncClock, serverNow } from '../supabase.js';
 import { esc, topbar, $, $$, guard, toast, joinUrl, copyText, download, fmtTime, icon, statusBadge, badge } from '../ui.js';
 import { requireAdmin } from './_auth.js';
-import { loadState, standings, subscribe, newSolves, phase, rosterHtml, counts, scoreboardHtml, feedHtml } from '../data.js';
+import { loadState, loadContent, standings, subscribe, newSolves, phase, rosterHtml, counts, scoreboardHtml, feedHtml } from '../data.js';
+import { caseHtml } from '../puzzles.js';
+import { mountGrid } from '../grid.js';
+import { caseBanner } from '../themes.js';
+import { mountAvatarPicker, avatarSvg, sanitize, DEFAULT_AVATAR } from '../avatars.js';
+import { revealCeremony } from '../fx.js';
 
 const FIELDS = [
   ['countdown', 'Get-ready countdown (seconds)', 0, 120],
@@ -23,14 +28,15 @@ export async function mount(app, [gameId]) {
 
   let st = await loadState(gameId);
   if (st.game.host_id !== user.id) throw new Error('You are not the host of this game.');
-  let chosen = '', prev = st, closing = false;
+  let chosen = '', prev = st, closing = false, content = null, contentFor = null, caseKey = '', sortBy = 'total';
+  const seenReveal = new Set(st.rounds.filter((r) => r.revealed).map((r) => r.id));
   const { data: pz } = await sb.from('puzzles').select('id,title').eq('owner_id', user.id).order('created_at');
   const puzzles = pz || [];
 
   app.innerHTML = topbar(`<a class="btn sm sec" href="#/admin">${icon('flag', 15)} All games</a>`) + `
     <main class="wrap"><div id="hdr"></div>
-      <div class="cols"><div class="stack"><div id="round"></div><div id="board"></div></div>
-        <div class="stack side"><div id="invite"></div><div id="feed"></div><div id="settings"></div></div></div></main>`;
+      <div class="cols"><div class="stack"><div id="round"></div><div id="casefile"></div><div id="board"></div></div>
+        <div class="stack side"><div id="invite"></div><div id="me"></div><div id="feed"></div><div id="settings"></div></div></div></main>`;
 
   const cfg = () => ({ ...DEFAULTS, ...st.game.settings });
 
@@ -72,7 +78,7 @@ export async function mount(app, [gameId]) {
         if (!Number.isInteger(v) || v < min || v > max) throw new Error(`${l} must be a whole number from ${min} to ${max}.`);
         n[k] = v;
       }
-      const { error } = await sb.from('games').update({ settings: n }).eq('id', gameId);
+      const { error } = await sb.from('games').update({ settings: { ...st.game.settings, ...n } }).eq('id', gameId);
       if (error) throw new Error(error.message);
       toast('Settings saved'); await refresh();
     });
@@ -109,7 +115,7 @@ export async function mount(app, [gameId]) {
     }
     if (cur && ph !== 'cancelled') {
       h += `<div class="flex wrapf mt-2">${ph === 'live' ? `<button class="btn danger sm" id="stop">${icon('stop', 14)} Stop round</button>` : ''}
-        ${!cur.revealed ? `<button class="btn sec sm" id="rev">${icon('eye', 14)} Reveal answer to teams</button>` : '<span class="badge ok">Answer revealed</span>'}</div>`;
+        ${!cur.revealed ? `<button class="btn sec sm" id="rev">${icon('eye', 14)} Reveal answer</button>` : '<span class="badge ok">Answer revealed</span>'}</div>`;
     }
 
     h += `<hr style="border:0;border-top:1px solid var(--line);margin:18px 0">`;
@@ -147,6 +153,7 @@ export async function mount(app, [gameId]) {
       await refresh();
     });
     guard($('#rev'), async () => {
+      if (!confirm('Reveal the answer on every screen? This plays the reveal on the projector and all phones.')) return;
       const { error } = await sb.rpc('reveal_round', { p_round: cur.id });
       if (error) throw new Error(error.message);
       await refresh();
@@ -162,8 +169,11 @@ export async function mount(app, [gameId]) {
   function drawBoard() {
     const rows = standings(st);
     $('#board').innerHTML = `<div class="card flush"><div class="card-h"><h3>${icon('trophy', 17)} Scoreboard</h3>
-      <button class="btn sm sec" id="csv"${rows.length ? '' : ' disabled'}>${icon('download', 15)} Export CSV</button></div>
-      ${scoreboardHtml(st)}</div>`;
+      <div class="flex wrapf"><div class="seg" role="group" aria-label="Rank teams by"><button data-sort="total" aria-pressed="${sortBy === 'total'}">Overall</button>
+        <button data-sort="round" aria-pressed="${sortBy === 'round'}"${st.current ? '' : ' disabled'}>This round</button></div>
+      <button class="btn sm sec" id="csv"${rows.length ? '' : ' disabled'}>${icon('download', 15)} Export CSV</button></div></div>
+      ${scoreboardHtml(st, { sortBy, phaseNow: phase(st.current, serverNow()) })}</div>`;
+    $$('#board [data-sort]').forEach((b) => (b.onclick = () => { sortBy = b.dataset.sort; drawBoard(); }));
     const csv = $('#csv');
     if (csv) csv.onclick = () => {
       const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
@@ -171,6 +181,53 @@ export async function mount(app, [gameId]) {
       const lines = rows.map((x, i) => [i + 1, x.team.name, x.team.team_members.map((m) => m.player_name).join('; '),
         ...st.rounds.map((r) => x.byRound[r.id]?.score ?? 0), x.total].map(q).join(','));
       download(`${st.game.title.replace(/[^\w]+/g, '-')}-scores.csv`, [head.map(q).join(','), ...lines].join('\n'), 'text/csv');
+    };
+  }
+
+  /* The host sees the same case file and grid as the teams once the round is live. The answer stays sealed until revealed. */
+  async function ensureContent() {
+    const r = st.current, p = phase(r, serverNow());
+    if (!r) { content = null; contentFor = null; return; }
+    if ((p === 'live' || p === 'closed') && contentFor !== r.id) {
+      try { content = await loadContent(r.id); contentFor = content ? r.id : null; } catch { content = null; }
+    }
+  }
+  function drawCase() {
+    const r = st.current, p = phase(r, serverNow());
+    const show = r && (p === 'live' || p === 'closed') && st.game.status !== 'finished';
+    if (!show) { $('#casefile').innerHTML = ''; caseKey = ''; return; }
+    const sol = r.revealed && r.reveal ? r.reveal.solution : null;
+    const key = [r.id, content ? 1 : 0, sol ? 1 : 0].join('|');
+    if (key === caseKey) return;
+    caseKey = key;
+    $('#casefile').innerHTML = `<div class="card flush">${caseBanner(r, content)}
+      <details class="cf" open><summary>${icon('book', 16)} Case file and deduction grid <span class="muted sm">(what the teams see)</span></summary>
+      <div class="cf-body"><div class="paper pad">${content ? caseHtml(content, esc) : '<p class="muted">Opening the case file…</p>'}</div>
+      <div class="cf-grid"><div class="flex between"><b>Host grid</b><button class="btn sm ghost" id="hclr">Clear</button></div><div id="hgrid" class="mt-2"></div></div></div></details></div>`;
+    if (content) {
+      const g = mountGrid($('#hgrid'), content, `cc-host-grid:${r.id}`, { solution: sol });
+      $('#hclr').onclick = () => { if (confirm('Clear your grid?')) g.clear(); };
+    }
+  }
+
+  function drawMe() {
+    const cur = st.game.settings?.host_avatar;
+    $('#me').innerHTML = `<div class="card"><div class="card-h"><h3>${icon('user', 17)} Lead investigator</h3>
+      <button class="btn sm ghost" id="hav">${cur ? 'Edit' : 'Create avatar'}</button></div>
+      <div class="flex"><span class="av img lg">${avatarSvg(cur || DEFAULT_AVATAR, 40)}</span><span class="muted sm">Your cartoon detective appears on the projector next to the game name.</span></div>
+      <div id="havbox" class="hidden mt"></div></div>`;
+    $('#hav').onclick = () => {
+      const box = $('#havbox'); if (!box.classList.toggle('hidden') && !box.firstChild) {
+        let pending = sanitize(cur || DEFAULT_AVATAR);
+        box.innerHTML = '<div id="havpk"></div><button class="btn block mt-2" id="havsv">Save avatar</button>';
+        mountAvatarPicker($('#havpk'), pending, (c) => (pending = c));
+        guard($('#havsv'), async () => {
+          const { error } = await sb.from('games').update({ settings: { ...st.game.settings, host_avatar: pending } }).eq('id', gameId);
+          if (error) throw new Error(error.message);
+          try { localStorage.setItem('cc_host_avatar', JSON.stringify(pending)); } catch { /* ignore */ }
+          toast('Avatar saved'); await refresh();
+        });
+      }
     };
   }
 
@@ -182,15 +239,20 @@ export async function mount(app, [gameId]) {
   async function refresh(force = true) {
     prev = st;
     st = await loadState(gameId);
-    if (!force && sig(prev) === sig(st)) return;
+    const had = contentFor;
+    await ensureContent();
+    if (!force && sig(prev) === sig(st) && had === contentFor) return;
     newSolves(prev, st).slice(0, 1).forEach((n) => toast(`${n} just cracked the case!`));
-    drawHdr(); drawInvite(); drawRound(); drawBoard(); drawFeed();
+    const r = st.current;
+    if (r && r.revealed && r.reveal && !seenReveal.has(r.id)) { seenReveal.add(r.id); revealCeremony(r.reveal, r.title); }
+    drawHdr(); drawInvite(); drawRound(); drawCase(); drawBoard(); drawFeed();
+    if (!$('#havbox') || $('#havbox').classList.contains('hidden')) drawMe();
   }
 
   let lastPh = '';
   const timer = setInterval(async () => {
     const cur = st.current, ph = phase(cur, serverNow());
-    if (ph !== lastPh) { lastPh = ph; if (cur) drawRound(); }          // countdown -> live flips the panel
+    if (ph !== lastPh) { lastPh = ph; if (cur) refresh(true).catch(() => {}); }   // countdown -> live: load the case file
     if (!cur) return;
     if (ph === 'countdown') {
       const el = $('#cd'); if (el) el.textContent = Math.max(0, Math.ceil((new Date(cur.started_at).getTime() - serverNow()) / 1000));
@@ -208,7 +270,8 @@ export async function mount(app, [gameId]) {
   }, 250);
 
   lastPh = phase(st.current, serverNow());
-  drawHdr(); drawInvite(); drawSettings(); drawRound(); drawBoard(); drawFeed();
+  await ensureContent();
+  drawHdr(); drawInvite(); drawSettings(); drawRound(); drawCase(); drawBoard(); drawFeed(); drawMe();
   const unsub = subscribe(gameId, () => refresh(false).catch(() => {}));
   return () => { clearInterval(timer); unsub(); };
 }

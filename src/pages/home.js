@@ -1,5 +1,7 @@
 import { hostIdentity, playerIdentity } from '../supabase.js';
 import { esc, topbar, $, icon } from '../ui.js';
+import { THEMES, sceneSvg } from '../themes.js';
+import { avatarSvg, PRESETS } from '../avatars.js';
 
 export async function mount(app) {
   const [host, player] = await Promise.all([hostIdentity(), playerIdentity()]);
@@ -11,10 +13,10 @@ export async function mount(app) {
   <main class="wrap">
     <section class="hero">
       <div>
-        <span class="badge brand">Team murder-mystery game</span>
-        <h1 class="mt-2">Gather your team.<br>Crack the case.</h1>
-        <p class="lead">A host runs the rounds. Teams join from their own phones with a link, wait together in the lobby,
-        study the clues, and race the clock to name the suspect, the weapon and the location.</p>
+        <div class="hero-art">${sceneSvg(THEMES[Math.floor(Math.random() * THEMES.length)])}<div class="peek">${avatarSvg(PRESETS[0].cfg, 150)}</div></div>
+        <h1>Gather your team.<span class="l2">Crack the case.</span></h1>
+        <p class="lead">A live murder-mystery race for the whole room. Teams join from their phones, study the suspects,
+        fill in the deduction grid and beat the clock to name who did it, with what, and where.</p>
       </div>
       <div class="card">
         <h3 class="mb">${icon('door', 18)} Join a game</h3>
@@ -27,10 +29,16 @@ export async function mount(app) {
         <p class="muted sm" style="margin:0">Running the game? <a href="#/admin/login">Sign in as host</a></p>
       </div>
     </section>
+    <section class="perks">
+      <div class="perk"><span class="pi">🎭</span><div><b>A new scene every level</b><span class="muted sm">Each case gets its own cartoon setting, from moonlit manors to stormy harbours.</span></div></div>
+      <div class="perk"><span class="pi">🕵️</span><div><b>Mugshot line-ups</b><span class="muted sm">Every suspect gets a cartoon mugshot, and every player builds their own detective.</span></div></div>
+      <div class="perk"><span class="pi">🧠</span><div><b>Smart deduction grid</b><span class="muted sm">Confirm a pair and the impossible squares cross themselves out.</span></div></div>
+      <div class="perk"><span class="pi">🔴</span><div><b>The big reveal</b><span class="muted sm">Evidence cards flip and a CASE CLOSED stamp lands on every screen at once.</span></div></div>
+    </section>
     <section class="steps">
       <div class="card step"><div class="num">1</div><h3>Open the link</h3><p class="muted sm mt-2">Create a team, or join a teammate with their team code. No account needed.</p></div>
       <div class="card step"><div class="num">2</div><h3>Wait in the lobby</h3><p class="muted sm mt-2">See your teammates arrive and tap “I’m ready”. The host starts when everyone is in.</p></div>
-      <div class="card step"><div class="num">3</div><h3>Solve together</h3><p class="muted sm mt-2">A 15-second countdown, then the clock starts. Use the deduction grid and submit your answer.</p></div>
+      <div class="card step"><div class="num">3</div><h3>Solve together</h3><p class="muted sm mt-2">A short briefing countdown, then the clock starts. Use the grid, your notebook and hints, then name the culprit.</p></div>
     </section>
   </main>`;
   $('#jf').onsubmit = (e) => {

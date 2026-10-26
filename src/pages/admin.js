@@ -3,6 +3,7 @@ import { esc, topbar, $, $$, guard, toast, joinUrl, copyText, download, icon, st
 import { requireAdmin } from './_auth.js';
 import { importPuzzles, caseHtml } from '../puzzles.js';
 import { SAMPLES } from '../samples.js';
+import { mountAvatarPicker, sanitize, DEFAULT_AVATAR } from '../avatars.js';
 
 export async function mount(app) {
   const user = await requireAdmin(app);
@@ -41,9 +42,11 @@ export async function mount(app) {
   function drawGames() {
     $('#pane').innerHTML = `
       <div class="card mb"><div class="card-h"><h3>${icon('plus', 17)} New game</h3></div>
-        <form id="ng" class="flex wrapf" style="align-items:flex-end">
+        <form id="ng">
+          <div class="flex wrapf" style="align-items:flex-end">
           <label class="field grow" style="margin:0;min-width:240px"><span>Game name</span><input id="gt" maxlength="80" required placeholder="Friday office mystery night"></label>
-          <button class="btn lg" type="submit">Create game</button></form></div>
+          <button class="btn lg" type="submit">Create game</button></div>
+          <div class="field mt"><span>Your lead-investigator avatar (shown on the projector)</span><div id="hpk"></div></div></form></div>
       <div class="card flush">${games.length ? games.map((g) => `
         <div class="item"><div class="grow"><div class="b">${esc(g.title)}</div>
           <div class="muted sm">${new Date(g.created_at).toLocaleString()}</div></div>
@@ -52,10 +55,16 @@ export async function mount(app) {
           <a class="btn sm" href="#/admin/game/${g.id}">Manage</a>
           <button class="btn sm ghost" data-delgame="${g.id}" aria-label="Delete game">${icon('trash', 16)}</button></div>`).join('')
         : `<div class="empty">${icon('flag', 28)}<p class="mt-2">No games yet. Create one above, then share its join link with your teams.</p></div>`}</div>`;
+    let hostAv = DEFAULT_AVATAR;
+    try { hostAv = sanitize(JSON.parse(localStorage.getItem('cc_host_avatar')) || DEFAULT_AVATAR); } catch { /* ignore */ }
+    const pk = mountAvatarPicker($('#hpk'), hostAv, (c) => (hostAv = c), { compact: true });
     $('#ng').onsubmit = async (e) => {
       e.preventDefault();
-      const { data, error } = await sb.from('games').insert({ host_id: user.id, title: $('#gt').value.trim() }).select('id').single();
+      const { data, error } = await sb.from('games').insert({ host_id: user.id, title: $('#gt').value.trim() }).select('id,settings').single();
       if (error) return toast(error.message, true);
+      hostAv = pk.get();
+      try { localStorage.setItem('cc_host_avatar', JSON.stringify(hostAv)); } catch { /* ignore */ }
+      await sb.from('games').update({ settings: { ...(data.settings || {}), host_avatar: hostAv } }).eq('id', data.id);
       location.hash = '#/admin/game/' + data.id;
     };
     $$('[data-copy]').forEach((b) => (b.onclick = () => copyText(joinUrl(b.dataset.copy))));
