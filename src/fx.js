@@ -9,7 +9,7 @@ const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 export function confetti(n = 90) {
   if (reduced()) return;
   const box = document.createElement('div'); box.className = 'confetti'; box.setAttribute('aria-hidden', 'true');
-  const cols = ['#ff9f7a', '#ff5d73', '#4fd6be', '#f7f3ee', '#9d8cf2', '#f5c451'];
+  const cols = ['#ffcd3c', '#ff4f64', '#3fcfb8', '#f8f4e8', '#8f86e8', '#ffe066'];
   for (let i = 0; i < n; i++) {
     const p = document.createElement('i');
     p.style.cssText = `left:${Math.random() * 100}%;background:${cols[i % cols.length]};animation-delay:${Math.random() * 0.6}s;animation-duration:${2 + Math.random() * 1.6}s;--r:${Math.random() * 720 - 360}deg;--x:${Math.random() * 160 - 80}px`;

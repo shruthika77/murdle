@@ -91,8 +91,8 @@ The anon key is meant to be public. Security comes from Row Level Security and t
   three see where they finished. The projector can replay the ceremony.
 - **New projector join card:** an admission ticket with a QR code to scan, the game code as big letter tiles, the short
   link, and live counts of teams, detectives and players who are ready.
-- **New colours:** a violet-ink night with a warm peach accent, mint and rose. Gold, silver and bronze are only used for
-  the winners.
+- **Crime-scene gold colours:** a deep navy night with crime-tape yellow, teal and red. The deduction grid is a manila
+  case-file sheet with yellow tape labels and a yellow highlighter on the revealed answer.
 
 No database migration is needed: the number of rounds is stored in the game's existing settings.
 

@@ -71,7 +71,7 @@ export function topbar(right = '') {
     <button class="btn sm ghost snd" type="button" data-sound aria-pressed="${soundOn()}" aria-label="Sound effects" title="Sound effects">${soundOn() ? '🔊' : '🔇'}</button></div></header>`;
 }
 const TAPE = 'Crime scene &nbsp;✕&nbsp; do not cross &nbsp;✕&nbsp; '.repeat(6);
-const BRAND = `<svg viewBox="0 0 40 40" width="34" height="34" aria-hidden="true"><circle cx="17" cy="17" r="11" fill="#ffe3d3" stroke="#12132b" stroke-width="3.5"/>
+const BRAND = `<svg viewBox="0 0 40 40" width="34" height="34" aria-hidden="true"><circle cx="17" cy="17" r="11" fill="#fff1b0" stroke="#111a33" stroke-width="3.5"/>
   <path d="M25 25L35 35" stroke="#141a2e" stroke-width="6" stroke-linecap="round"/><path d="M25 25L35 35" stroke="#ff5d73" stroke-width="3" stroke-linecap="round"/>
   <path d="M11 14Q13 10 17 10" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>`;
 document.addEventListener('click', (e) => {
