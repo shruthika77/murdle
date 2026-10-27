@@ -1,6 +1,6 @@
 import { sb, whoAmI, syncClock, serverNow } from '../supabase.js';
 import { esc, topbar, $, guard, toast, fmtTime, flash, copyText, icon, badge, showGetReady, hideGetReady } from '../ui.js';
-import { loadState, loadContent, standings, subscribe, newSolves, leaderboardHtml, rosterHtml, counts, phase, feedHtml, podiumHtml, awardsHtml } from '../data.js';
+import { loadState, loadContent, standings, subscribe, newSolves, leaderboardHtml, rosterHtml, counts, phase, feedHtml, podiumHtml, awardsHtml, levelLabel, roundPlan, roundTrackHtml, crownOnce } from '../data.js';
 import { mountAvatarPicker, sanitize } from '../avatars.js';
 import { caseViewShell, drawCaseView, setCaseViewTime } from '../caseview.js';
 import { rankFor } from '../themes.js';
@@ -62,11 +62,17 @@ export async function mount(app, [gameId]) {
   function drawLobby() {
     const p = ph(), c = counts(st), mm = myMember();
     const first = !st.rounds.length;
-    const title = p === 'countdown' ? 'Round starting…' : first ? 'Waiting room' : 'Waiting for the next round';
+    const plan = roundPlan(st, serverNow());
+    const nextNo = st.rounds.length + 1, nextFinal = plan.total && nextNo === plan.total;
+    const title = p === 'countdown' ? 'Round starting…' : first ? 'Waiting room'
+      : plan.allStarted ? 'All rounds played' : nextFinal ? 'Up next: the final round' : `Waiting for round ${nextNo}${plan.total ? ` of ${plan.total}` : ''}`;
     const sub = p === 'countdown' ? 'Get ready. The case opens in a moment.'
-      : first ? 'Waiting for your host to start. Teammates can join with your team code.' : 'Take a breath. The host will start the next round soon.';
+      : first ? `Waiting for your host to start${plan.total ? ` the first of ${plan.total} rounds` : ''}. Teammates can join with your team code.`
+      : plan.allStarted ? 'Your host is about to crown the winners. Fingers crossed!'
+      : nextFinal ? 'One case left. Everything is still to play for.' : 'Take a breath. The host will start the next round soon.';
     $('#lobby').innerHTML = `<div class="card"><div class="card-h"><div><h3>${icon('users', 17)} ${title}</h3><div class="muted sm mt-2">${sub}</div></div>
       <div class="flex"><span class="pulse-dot"></span><span class="sm b">${c.ready} of ${c.players} ready</span></div></div>
+      ${plan.total ? `<div class="rt-wrap mb">${roundTrackHtml(st, serverNow())}</div>` : ''}
       ${rosterHtml(st, { meId: user.id })}
       <div class="flex wrapf mt">
         <button class="btn ${mm?.ready ? 'sec' : ''}" id="rdy">${mm?.ready ? icon('check', 16) + ' You’re ready. Tap to undo' : 'I’m ready'}</button>
@@ -98,7 +104,7 @@ export async function mount(app, [gameId]) {
   function drawCase() {
     const r = st.current;
     drawCaseView($('#game'), {
-      r, content, phase: ph(), ruled: new Set(hints.map((h) => h.value)), gridKey: gridKey(),
+      r, content, phase: ph(), label: levelLabel(st, r), ruled: new Set(hints.map((h) => h.value)), gridKey: gridKey(),
       note: 'Your marks are saved on this device.',
     });
   }
@@ -229,6 +235,7 @@ export async function mount(app, [gameId]) {
     lastSig = sig;
     const rr = st.current;
     if (rr && rr.revealed && rr.reveal && !seenReveal.has(rr.id)) { seenReveal.add(rr.id); revealCeremony(rr.reveal, rr.title); }
+    crownOnce(st, { meTeamId: me.id, scope: 'team' });
     newSolves(prev, st).forEach((n) => {
       if (n === me.name) return;
       const r = st.current, left = r ? (new Date(r.ends_at).getTime() - serverNow()) / 1000 : 0;
@@ -245,7 +252,7 @@ export async function mount(app, [gameId]) {
     }
     if (p === 'countdown') {
       const cd = r.settings.countdown ?? 15;
-      showGetReady((new Date(r.started_at).getTime() - serverNow()) / 1000, cd, `Level ${r.round_no}: ${r.title}`);
+      showGetReady((new Date(r.started_at).getTime() - serverNow()) / 1000, cd, `${levelLabel(st, r)}: ${r.title}`);
     } else hideGetReady(p === 'live');
     document.body.classList.remove('tense');
     if (p !== 'live') return;

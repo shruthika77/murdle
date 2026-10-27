@@ -1,9 +1,10 @@
 import { sb, setMode, hostIdentity, playerIdentity, syncClock, serverNow } from '../supabase.js';
-import { esc, topbar, $, $$, flash, joinUrl, icon, badge, showGetReady, hideGetReady } from '../ui.js';
-import { loadState, loadContent, subscribe, newSolves, scoreboardHtml, rosterHtml, counts, phase, feedHtml, podiumHtml, awardsHtml } from '../data.js';
+import { esc, topbar, $, $$, flash, joinUrl, icon, showGetReady, hideGetReady } from '../ui.js';
+import { loadState, loadContent, subscribe, newSolves, scoreboardHtml, rosterHtml, counts, phase, feedHtml, podiumHtml, awardsHtml, levelLabel, roundPlan, roundTrackHtml, crownOnce, winnersData } from '../data.js';
 import { caseViewShell, drawCaseView, setCaseViewTime } from '../caseview.js';
 import { avatarSvg } from '../avatars.js';
-import { revealCeremony } from '../fx.js';
+import { revealCeremony, winnersCeremony } from '../fx.js';
+import QRCode from 'qrcode';
 import { sfx } from '../sfx.js';
 
 /**
@@ -31,13 +32,45 @@ export async function mount(app, [gameId]) {
   st.rounds.filter((r) => r.revealed).forEach((r) => seenReveal.add(r.id));   // don't replay old reveals
 
   app.innerHTML = topbar(`<a class="btn sm sec" href="${isHost ? '#/admin/game/' + gameId : '#/play/' + gameId}">Back</a>`) + `
-    <main class="wrap"><div class="page-h"><div class="flex gap-3"><div id="host"></div><div><div class="kicker">Projector</div><h1 id="title"></h1></div></div><div id="status"></div></div>
+    <main class="wrap proj-wrap">
+      <header class="proj-h"><div id="host"></div>
+        <div class="grow"><div class="proj-k">Projector</div><h1 id="title" class="proj-title"></h1></div>
+        <div id="status"></div></header>
+      <div id="track" class="rt-wrap"></div>
       <div id="join"></div><div id="finale"></div>
       <div id="casewrap" class="hidden">${caseViewShell({ gridTitle: 'Room deduction grid' })}</div>
       <div id="lobby"></div>
       <div class="card flush mt"><div class="card-h"><h3>${icon('trophy', 18)} Scoreboard</h3>
         <div class="seg" role="group" aria-label="Rank teams by"><button data-sort="total" aria-pressed="true">Overall</button><button data-sort="round" aria-pressed="false">This round</button></div></div><div id="sb"></div></div>
       <div class="card flush mt"><div class="card-h"><h3>${icon('flag', 18)} Live activity</h3></div><div id="feed"></div></div></main>`;
+
+  /* ---------- admission ticket with a QR code ---------- */
+  const qrCache = new Map();
+  async function qrSvg(url) {
+    if (!qrCache.has(url)) {
+      try {
+        qrCache.set(url, await QRCode.toString(url, { type: 'svg', margin: 0, errorCorrectionLevel: 'M', color: { dark: '#12132b', light: '#ffffff' } }));
+      } catch { qrCache.set(url, ''); }
+    }
+    return qrCache.get(url);
+  }
+  function ticketHtml(g, c, qr) {
+    const url = joinUrl(g.join_code), short = url.replace(/^https?:\/\//, '');
+    const tiles = [...String(g.join_code)].map((ch) => `<span class="tk-tile">${esc(ch)}</span>`).join('');
+    return `<section class="ticket" aria-label="How to join">
+      <div class="tk-stub"><div class="tk-qr" role="img" aria-label="QR code for the join link">${qr || '<span class="muted sm">QR code unavailable</span>'}</div>
+        <div class="tk-scan">${icon('search', 15)} Scan with your phone camera</div></div>
+      <div class="tk-body">
+        <div class="tk-k">You’re invited to the investigation</div>
+        <h2 class="tk-h">Join with code</h2>
+        <div class="tk-code" aria-label="Game code ${esc(g.join_code)}">${tiles}</div>
+        <div class="tk-url">${icon('link', 16)} ${esc(short)}</div>
+        <div class="tk-stats"><span><b>${c.teams}</b> team${c.teams === 1 ? '' : 's'}</span><span><b>${c.players}</b> detective${c.players === 1 ? '' : 's'}</span>
+          <span class="ok"><b>${c.ready}</b> ready</span></div>
+      </div>
+      <div class="tk-art" aria-hidden="true">🕵️</div>
+    </section>`;
+  }
 
   $$('[data-sort]').forEach((b) => (b.onclick = () => {
     sortBy = b.dataset.sort; $$('[data-sort]').forEach((x) => x.setAttribute('aria-pressed', x === b)); drawBoard();
@@ -65,7 +98,7 @@ export async function mount(app, [gameId]) {
     if (key === caseKey) return;
     caseKey = key;
     drawCaseView($('#casewrap'), {
-      r, content, phase: p, gridKey: `cc-proj-grid:${r.id}`,
+      r, content, phase: p, label: levelLabel(st, r), gridKey: `cc-proj-grid:${r.id}`,
       note: isHost ? 'Mark the grid here to walk the room through the logic. Marks stay on this screen only.' : 'Marks stay on this screen only.',
     });
   }
@@ -75,14 +108,25 @@ export async function mount(app, [gameId]) {
     $('#title').textContent = g.title;
     const ha = g.settings?.host_avatar;
     $('#host').innerHTML = ha ? `<div class="host-av" title="Lead investigator">${avatarSvg(ha, 64)}</div>` : '';
-    $('#status').innerHTML = finished ? badge('ok', 'Final standings')
-      : p === 'live' ? badge('live', `Level ${r.round_no} in play`)
-      : p === 'countdown' ? badge('warn', 'Starting…') : p === 'closed' ? badge('ok', `Level ${r.round_no} finished`) : badge('', 'Waiting for the host');
-    $('#join').innerHTML = g.status !== 'finished' && (p !== 'live') && isHost
-      ? `<div class="card join-card"><div><div class="kicker">Join the investigation</div><div class="join-url">${esc(joinUrl(g.join_code))}</div>
-         <p class="muted sm" style="margin:6px 0 0">Or enter the code <b class="code">${esc(g.join_code)}</b> on the start page.</p></div><div class="join-ic" aria-hidden="true">🕵️</div></div>` : '';
+    const plan = roundPlan(st, serverNow());
+    $('#status').innerHTML = finished ? `<span class="pill gold">🏆 Final standings</span>`
+      : p === 'live' ? `<span class="pill live"><i></i>${esc(levelLabel(st, r))}</span>`
+      : p === 'countdown' ? `<span class="pill warn">Starting…</span>`
+      : p === 'closed' ? (plan.finalDone ? `<span class="pill gold">Final round finished</span>` : `<span class="pill ok">${esc(levelLabel(st, r))} finished</span>`)
+      : `<span class="pill">Waiting for the host</span>`;
+    $('#track').innerHTML = roundTrackHtml(st, serverNow());
+    const showJoin = !finished && p !== 'live' && isHost;
+    if (showJoin) {
+      $('#join').innerHTML = ticketHtml(g, c, qrCache.get(joinUrl(g.join_code)));
+      if (!qrCache.has(joinUrl(g.join_code))) qrSvg(joinUrl(g.join_code)).then(() => { if ($('#join .ticket')) $('#join').innerHTML = ticketHtml(g, counts(st), qrCache.get(joinUrl(g.join_code))); });
+    } else $('#join').innerHTML = '';
     $('#finale').innerHTML = finished
-      ? `<div class="card mb center"><h2>Final standings</h2>${podiumHtml(st)}</div>${awardsHtml(st) ? `<div class="card mb"><h3 class="mb">Awards</h3>${awardsHtml(st)}</div>` : ''}` : '';
+      ? `<section class="finale"><div class="fn-k">Case files closed</div><h2 class="fn-h">Final standings</h2>${podiumHtml(st)}
+          <button class="btn sec sm mt" id="replay">🎉 Play the winners ceremony again</button></section>
+         ${awardsHtml(st) ? `<div class="card mb"><h3 class="mb">Special awards</h3>${awardsHtml(st)}</div>` : ''}`
+      : plan.finalDone ? `<div class="callout brand mb center"><b>That was the final round!</b> The host is about to crown the winners.</div>` : '';
+    const rp = $('#replay');
+    if (rp) rp.onclick = () => winnersCeremony(winnersData(st), { title: g.title });
     $('#lobby').innerHTML = !finished && p !== 'live' && p !== 'closed'
       ? `<div class="card mt"><div class="card-h"><h3>${icon('users', 18)} In the lobby</h3>
          <span class="b">${c.players} player${c.players === 1 ? '' : 's'}, <span style="color:var(--ok)">${c.ready} ready</span></span></div>${rosterHtml(st)}</div>` : '';
@@ -104,12 +148,13 @@ export async function mount(app, [gameId]) {
     const r = st.current;
     if (r && r.revealed && r.reveal && !seenReveal.has(r.id)) { seenReveal.add(r.id); revealCeremony(r.reveal, r.title); }
     draw();
+    crownOnce(st, { scope: 'board' });
   }
 
   function tick() {
     const r = st.current, p = ph();
     if (p !== lastPh) { const was = lastPh; lastPh = p; if (was) refresh(true).catch(() => {}); }
-    if (p === 'countdown') showGetReady((new Date(r.started_at).getTime() - serverNow()) / 1000, r.settings.countdown ?? 15, `Level ${r.round_no}: ${r.title}`);
+    if (p === 'countdown') showGetReady((new Date(r.started_at).getTime() - serverNow()) / 1000, r.settings.countdown ?? 15, `${levelLabel(st, r)}: ${r.title}`);
     else hideGetReady(p === 'live');
     document.body.classList.remove('tense');
     if (p !== 'live') return;

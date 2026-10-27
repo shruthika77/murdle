@@ -1,12 +1,13 @@
 import { sb, syncClock, serverNow } from '../supabase.js';
 import { esc, topbar, $, $$, guard, toast, joinUrl, copyText, download, fmtTime, icon, statusBadge, badge } from '../ui.js';
 import { requireAdmin } from './_auth.js';
-import { loadState, loadContent, standings, subscribe, newSolves, phase, rosterHtml, counts, scoreboardHtml, feedHtml } from '../data.js';
+import { loadState, loadContent, standings, subscribe, newSolves, phase, rosterHtml, counts, scoreboardHtml, feedHtml, roundPlan, levelLabel, roundTrackHtml, crownOnce } from '../data.js';
 import { caseViewShell, drawCaseView, setCaseViewTime } from '../caseview.js';
 import { mountAvatarPicker, avatarSvg, sanitize, DEFAULT_AVATAR } from '../avatars.js';
 import { revealCeremony } from '../fx.js';
 
 const FIELDS = [
+  ['total_rounds', 'Rounds in this game', 1, 20],
   ['countdown', 'Get-ready countdown (seconds)', 0, 120],
   ['timer', 'Round time (seconds)', 10, 7200],
   ['base', 'Points for a correct answer', 0, 10000],
@@ -17,7 +18,7 @@ const FIELDS = [
   ['max_hints', 'Hints per team per round (0 = off)', 0, 3],
   ['hint_cost', 'Points a hint costs', 0, 1000],
 ];
-const DEFAULTS = { countdown: 15, timer: 300, base: 100, bonus: 50, penalty: 10, max_attempts: 3, partial: 10, use_partial: true, max_hints: 2, hint_cost: 15 };
+const DEFAULTS = { total_rounds: 3, countdown: 15, timer: 300, base: 100, bonus: 50, penalty: 10, max_attempts: 3, partial: 10, use_partial: true, max_hints: 2, hint_cost: 15 };
 
 export async function mount(app, [gameId]) {
   const user = await requireAdmin(app);
@@ -60,7 +61,7 @@ export async function mount(app, [gameId]) {
       await refresh();
     });
     guard($('#fin'), async () => {
-      if (!confirm('Finish the game? Teams will no longer be able to join or answer.')) return;
+      if (!confirm('Finish the game now and crown the winners? Teams will no longer be able to join or answer.')) return;
       const { error } = await sb.rpc('finish_game', { p_game: gameId });
       if (error) throw new Error(error.message);
       await refresh();
@@ -104,10 +105,12 @@ export async function mount(app, [gameId]) {
     const avail = puzzles.filter((p) => !played.has(p.id));
     if (!avail.some((p) => p.id === chosen)) chosen = '';
     const running = ph === 'countdown' || ph === 'live';
+    const plan = roundPlan(st, serverNow());
     const doneCount = cur ? st.results.filter((r) => r.round_id === cur.id && r.done).length : 0;
 
     let h = `<div class="card"><div class="card-h"><h3>${icon('play', 17)} Round control</h3>
-      ${ph === 'live' ? badge('live', 'Round ' + cur.round_no + ' live') : ph === 'countdown' ? badge('warn', 'Countdown') : ''}</div>`;
+      ${ph === 'live' ? badge('live', esc(levelLabel(st, cur)) + ' live') : ph === 'countdown' ? badge('warn', 'Countdown') : ''}</div>
+      ${plan.total ? `<div class="rt-wrap mb">${roundTrackHtml(st, serverNow())}<div class="muted sm">${plan.played} of ${plan.total} rounds started${plan.left ? `, ${plan.left} to go` : ''}</div></div>` : ''}`;
 
     if (ph === 'countdown') {
       h += `<div class="callout warn flex wrapf"><div class="grow"><div class="b">Round ${cur.round_no} starts in <span id="cd" style="font-size:22px">…</span> s</div>
@@ -132,7 +135,15 @@ export async function mount(app, [gameId]) {
     }
 
     h += `<hr style="border:0;border-top:1px solid var(--line);margin:18px 0">`;
-    if (g.status === 'finished') h += '<p class="muted">This game is finished.</p>';
+    if (g.status === 'finished') h += '<p class="muted">This game is finished. The winners have been crowned.</p>';
+    else if (plan.allStarted) {
+      h += plan.finalDone || (!running && cur)
+        ? `<div class="crown-cta"><div class="cc-ic" aria-hidden="true">🏆</div><div class="grow"><div class="b">All ${plan.total} rounds are done</div>
+            <div class="sm">Crown the winners: every screen plays the podium for 3rd, 2nd and 1st place.</div></div>
+            <button class="btn lg" id="crown">Crown the winners</button></div>
+           <p class="muted xs mt-2">Want to keep going? Raise “Rounds in this game” in Rules and scoring.</p>`
+        : `<p class="muted">This is the final round. When it ends, you can crown the winners here.</p>`;
+    }
     else if (!puzzles.length) h += '<div class="callout warn">Your puzzle library is empty. <a href="#/admin">Add puzzles</a> first.</div>';
     else if (!avail.length) h += '<p class="muted">Every puzzle in your library has been played. <a href="#/admin">Add more</a> or finish the game.</p>';
     else {
@@ -141,7 +152,7 @@ export async function mount(app, [gameId]) {
         ${!running && c.players ? '<span class="pulse-dot" title="Live"></span>' : ''}</div>
         <label class="field"><span>Choose the puzzle</span><select id="sel"><option value="">Select a puzzle</option>${avail.map((p) =>
           `<option value="${p.id}"${p.id === chosen ? ' selected' : ''}>${esc(p.title)}</option>`).join('')}</select></label>
-        <button class="btn lg block" id="start">${icon('play', 16)} ${running ? 'End current round and start this one' : 'Start round'}</button>
+        <button class="btn lg block" id="start">${icon('play', 16)} ${running ? 'End current round and start this one' : plan.total && plan.played + 1 === plan.total ? `Start the final round` : `Start round ${plan.played + 1}${plan.total ? ` of ${plan.total}` : ''}`}</button>
         <p class="muted sm center mt-2">${s.countdown ? `A ${s.countdown}-second countdown runs on every screen, then` : 'Immediately,'} the ${fmtTime(s.timer)} clock starts.</p>`;
     }
     h += '</div>';
@@ -152,6 +163,12 @@ export async function mount(app, [gameId]) {
     $('#round').innerHTML = h;
 
     const sel = $('#sel'); if (sel) sel.onchange = () => (chosen = sel.value);
+    guard($('#crown'), async () => {
+      if (!confirm('Crown the winners and finish the game? Teams can no longer answer after this.')) return;
+      const { error } = await sb.rpc('finish_game', { p_game: gameId });
+      if (error) throw new Error(error.message);
+      await refresh();
+    });
     guard($('#start'), async () => {
       if (!chosen) throw new Error('Choose a puzzle first.');
       if (!c.players && !confirm('No players have joined yet. Start anyway?')) return;
@@ -214,7 +231,7 @@ export async function mount(app, [gameId]) {
     if (key === caseKey) return;
     caseKey = key;
     drawCaseView($('#casefile'), {
-      r, content, phase: p, gridKey: `cc-host-grid:${r.id}`,
+      r, content, phase: p, label: levelLabel(st, r), gridKey: `cc-host-grid:${r.id}`,
       note: 'This is exactly what the teams see. Your marks stay on this device.',
     });
   }
@@ -255,6 +272,7 @@ export async function mount(app, [gameId]) {
     const r = st.current;
     if (r && r.revealed && r.reveal && !seenReveal.has(r.id)) { seenReveal.add(r.id); revealCeremony(r.reveal, r.title); }
     drawHdr(); drawInvite(); drawRound(); drawCase(); drawBoard(); drawFeed();
+    crownOnce(st, { scope: 'host' });
     if (!$('#havbox') || $('#havbox').classList.contains('hidden')) drawMe();
   }
 

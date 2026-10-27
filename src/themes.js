@@ -13,7 +13,7 @@ const stars = (n, seed, w = 800, h = 90) => {
   return out;
 };
 const moon = (x, y, r = 26) => `<circle cx="${x}" cy="${y}" r="${r + 16}" fill="#fff3b0" opacity=".12"/><circle cx="${x}" cy="${y}" r="${r}" fill="#fff3b0" stroke="${INK}" stroke-width="3"/><circle cx="${x - 8}" cy="${y - 5}" r="5" fill="#f1dd86"/><circle cx="${x + 7}" cy="${y + 8}" r="3.5" fill="#f1dd86"/>`;
-const win = (x, y, w = 14, h = 18, lit = true) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="${lit ? '#ffd23f' : '#2a3352'}" stroke="${INK}" stroke-width="2.5"/>`;
+const win = (x, y, w = 14, h = 18, lit = true) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="${lit ? '#ffcf8a' : '#2a3352'}" stroke="${INK}" stroke-width="2.5"/>`;
 const ground = (col) => `<path d="M0 200V172Q200 158 400 170T800 166V200Z" fill="${col}" stroke="${INK}" stroke-width="3"/>`;
 
 const SCENES = {
@@ -33,7 +33,7 @@ const SCENES = {
     <path d="M560 175L585 60H625L650 175Z" fill="#f6f1e7" stroke="${INK}" stroke-width="3"/>
     <path d="M572 120H638M566 150H644M578 92H632" stroke="#e2384d" stroke-width="10"/>
     <path d="M560 175L585 60H625L650 175Z" fill="none" stroke="${INK}" stroke-width="3"/>
-    <rect x="578" y="36" width="54" height="26" rx="4" fill="#ffd23f" stroke="${INK}" stroke-width="3"/>
+    <rect x="578" y="36" width="54" height="26" rx="4" fill="#ffcf8a" stroke="${INK}" stroke-width="3"/>
     <path d="M572 36L605 14L638 36Z" fill="#e2384d" stroke="${INK}" stroke-width="3"/>
     <path class="beam" d="M632 48L800 10V86Z" fill="#fff3b0" opacity=".25"/>
     <path d="M150 168L170 140H330L350 168Z" fill="#e2384d" stroke="${INK}" stroke-width="3"/>
@@ -46,7 +46,7 @@ const SCENES = {
     <path d="M40 0V200M90 0V200M710 0V200M760 0V200" stroke="#8a1730" stroke-width="5"/>
     <path d="M0 0H800V26Q700 46 600 26Q500 46 400 26Q300 46 200 26Q100 46 0 26Z" fill="#d93a52" stroke="${INK}" stroke-width="3"/>
     <rect x="0" y="168" width="800" height="32" fill="#6b3a1e" stroke="${INK}" stroke-width="3"/>
-    <path d="M370 168V128Q400 104 430 128V168Z" fill="#ffd23f" stroke="${INK}" stroke-width="3"/>
+    <path d="M370 168V128Q400 104 430 128V168Z" fill="#ffcf8a" stroke="${INK}" stroke-width="3"/>
     <circle cx="390" cy="138" r="4" fill="${INK}"/><circle cx="410" cy="138" r="4" fill="${INK}"/><path d="M388 152Q400 160 412 152" stroke="${INK}" stroke-width="3" fill="none"/>
     <path d="M440 168V132Q470 108 500 132V168Z" fill="#f6f1e7" stroke="${INK}" stroke-width="3"/>
     <circle cx="460" cy="142" r="4" fill="${INK}"/><circle cx="480" cy="142" r="4" fill="${INK}"/><path d="M458 160Q470 150 482 160" stroke="${INK}" stroke-width="3" fill="none"/>`,
@@ -57,7 +57,7 @@ const SCENES = {
     <rect x="196" y="166" width="408" height="10" fill="#d8caa8" stroke="${INK}" stroke-width="3"/>
     <path d="M388 50L400 40L412 50L400 62Z" fill="#3ec5b7" stroke="${INK}" stroke-width="2.5"/>
     <path d="M60 172L100 110L140 172Z" fill="#e0b04c" stroke="${INK}" stroke-width="3"/>
-    <path d="M680 172V140H730V172" fill="#3ec5b7" stroke="${INK}" stroke-width="3"/><circle cx="705" cy="128" r="12" fill="#ffd23f" stroke="${INK}" stroke-width="3"/>
+    <path d="M680 172V140H730V172" fill="#3ec5b7" stroke="${INK}" stroke-width="3"/><circle cx="705" cy="128" r="12" fill="#ffcf8a" stroke="${INK}" stroke-width="3"/>
     ${ground(a)}`,
   kitchen: (a) => `<rect width="800" height="200" fill="#2a2140"/>
     ${Array.from({ length: 20 }, (_, i) => `<rect x="${i * 40}" y="${i % 2 ? 0 : 20}" width="40" height="20" fill="#332954"/>`).join('')}
@@ -82,13 +82,13 @@ const SCENES = {
     <path d="M580 70V172M520 118H640M550 76V172M610 76V172" stroke="${INK}" stroke-width="2"/>
     <circle cx="240" cy="110" r="44" fill="#3f8f4f" stroke="${INK}" stroke-width="3"/><circle cx="200" cy="130" r="34" fill="#4ea85e" stroke="${INK}" stroke-width="3"/>
     <rect x="232" y="140" width="16" height="34" fill="#7a4e2a" stroke="${INK}" stroke-width="3"/>
-    ${[[330, 160], [360, 150], [390, 162], [700, 158], [730, 150]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="9" fill="#e2384d" stroke="${INK}" stroke-width="2.5"/><circle cx="${x}" cy="${y}" r="3" fill="#ffd23f"/>`).join('')}
+    ${[[330, 160], [360, 150], [390, 162], [700, 158], [730, 150]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="9" fill="#e2384d" stroke="${INK}" stroke-width="2.5"/><circle cx="${x}" cy="${y}" r="3" fill="#ffcf8a"/>`).join('')}
     <path d="M420 172V146Q430 130 440 146V172Z" fill="#c9b79c" stroke="${INK}" stroke-width="3"/><circle cx="430" cy="128" r="9" fill="#e2384d" stroke="${INK}" stroke-width="2.5"/>
     ${ground(a)}`,
   city: (a) => `${stars(30, 29)}${moon(130, 52)}
     ${[[260, 60, 70], [340, 90, 60], [410, 40, 80], [500, 80, 60], [570, 50, 90], [670, 100, 60], [740, 70, 60]].map(([x, y, w]) =>
       `<rect x="${x}" y="${y}" width="${w}" height="${200 - y}" fill="#232b48" stroke="${INK}" stroke-width="3"/>${Array.from({ length: 6 }, (_, i) => win(x + 8 + (i % 2) * (w / 2 - 2), y + 12 + Math.floor(i / 2) * 26, 12, 14, (x + i * 7) % 5 < 3)).join('')}`).join('')}
-    <path d="M60 200V120H80V200" fill="#3a3f5c" stroke="${INK}" stroke-width="3"/><circle cx="70" cy="114" r="12" fill="#ffd23f" stroke="${INK}" stroke-width="3"/>
+    <path d="M60 200V120H80V200" fill="#3a3f5c" stroke="${INK}" stroke-width="3"/><circle cx="70" cy="114" r="12" fill="#ffcf8a" stroke="${INK}" stroke-width="3"/>
     <path d="M70 126L30 200H110Z" fill="#fff3b0" opacity=".18"/>
     <g class="rain">${Array.from({ length: 40 }, (_, i) => `<path d="M${(i * 41) % 800} ${(i * 23) % 120}l-6 16" stroke="#9db6dd" stroke-width="2" opacity=".5"/>`).join('')}</g>
     ${ground(a)}`,
@@ -118,10 +118,10 @@ export function sceneSvg(theme, cls = '') {
 }
 
 /** Banner shown above the case file: scene, level, title. */
-export function caseBanner(r, content, { big = false, right = '' } = {}) {
+export function caseBanner(r, content, { big = false, right = '', label = '' } = {}) {
   const t = themeFor(r.title, content, r.round_no);
   return `<div class="case-banner${big ? ' big' : ''}" style="--acc:${t.accent}">${sceneSvg(t)}
-    <div class="cb-in"><div class="cb-lvl"><span>Level ${r.round_no}</span><span class="cb-th">${t.name}</span></div>
+    <div class="cb-in"><div class="cb-lvl"><span${/^Final/.test(label) ? ' class="cb-final"' : ''}>${label || `Level ${r.round_no}`}</span><span class="cb-th">${t.name}</span></div>
     <h2 class="cb-title">${String(r.title).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))}</h2></div>${right}</div>`;
 }
 

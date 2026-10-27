@@ -16,7 +16,7 @@ export async function mount(app) {
 
   async function refresh() {
     const [g, p] = await Promise.all([
-      sb.from('games').select('id,title,status,join_code,created_at').eq('host_id', user.id).order('created_at', { ascending: false }),
+      sb.from('games').select('id,title,status,join_code,created_at,settings').eq('host_id', user.id).order('created_at', { ascending: false }),
       sb.from('puzzles').select('id,slug,title,content,solution,explanation').eq('owner_id', user.id).order('created_at'),
     ]);
     if (g.error) throw new Error(g.error.message);
@@ -45,11 +45,16 @@ export async function mount(app) {
         <form id="ng">
           <div class="flex wrapf" style="align-items:flex-end">
           <label class="field grow" style="margin:0;min-width:240px"><span>Game name</span><input id="gt" maxlength="80" required placeholder="Friday office mystery night"></label>
+          <div class="field rounds-pick" style="margin:0"><span>Number of rounds</span>
+            <div class="stepper"><button type="button" class="st-b" data-step="-1" aria-label="Fewer rounds">−</button>
+            <input id="gr" type="number" min="1" max="20" step="1" value="3" required aria-label="Number of rounds">
+            <button type="button" class="st-b" data-step="1" aria-label="More rounds">+</button></div></div>
           <button class="btn lg" type="submit">Create game</button></div>
+          <p class="muted sm mt-2" id="grhint"></p>
           <div class="field mt"><span>Your lead-investigator avatar (shown on the projector)</span><div id="hpk"></div></div></form></div>
       <div class="card flush">${games.length ? games.map((g) => `
         <div class="item"><div class="grow"><div class="b">${esc(g.title)}</div>
-          <div class="muted sm">${new Date(g.created_at).toLocaleString()}</div></div>
+          <div class="muted sm">${g.settings?.total_rounds ? `${g.settings.total_rounds} round${g.settings.total_rounds === 1 ? '' : 's'}, ` : ''}created ${new Date(g.created_at).toLocaleString()}</div></div>
           ${statusBadge(g.status)}
           <button class="btn sm sec" data-copy="${esc(g.join_code)}">${icon('link', 15)} Copy join link</button>
           <a class="btn sm" href="#/admin/game/${g.id}">Manage</a>
@@ -58,13 +63,22 @@ export async function mount(app) {
     let hostAv = DEFAULT_AVATAR;
     try { hostAv = sanitize(JSON.parse(localStorage.getItem('cc_host_avatar')) || DEFAULT_AVATAR); } catch { /* ignore */ }
     const pk = mountAvatarPicker($('#hpk'), hostAv, (c) => (hostAv = c), { compact: true });
+    const rounds = () => Math.max(1, Math.min(20, Math.round(Number($('#gr').value) || 1)));
+    const hint = () => {
+      const n = rounds();
+      $('#grhint').innerHTML = puzzles.length >= n
+        ? `${n} case${n === 1 ? '' : 's'} to crack. After the last one, you crown the top three teams.`
+        : `<span style="color:var(--warn)">Your library has ${puzzles.length} puzzle${puzzles.length === 1 ? '' : 's'}. Add ${n - puzzles.length} more before game night, or pick fewer rounds.</span>`;
+    };
+    $$('[data-step]').forEach((b) => (b.onclick = () => { $('#gr').value = rounds() + Number(b.dataset.step); $('#gr').value = rounds(); hint(); }));
+    $('#gr').oninput = hint; hint();
     $('#ng').onsubmit = async (e) => {
       e.preventDefault();
       const { data, error } = await sb.from('games').insert({ host_id: user.id, title: $('#gt').value.trim() }).select('id,settings').single();
       if (error) return toast(error.message, true);
       hostAv = pk.get();
       try { localStorage.setItem('cc_host_avatar', JSON.stringify(hostAv)); } catch { /* ignore */ }
-      await sb.from('games').update({ settings: { ...(data.settings || {}), host_avatar: hostAv } }).eq('id', data.id);
+      await sb.from('games').update({ settings: { ...(data.settings || {}), host_avatar: hostAv, total_rounds: rounds() } }).eq('id', data.id);
       location.hash = '#/admin/game/' + data.id;
     };
     $$('[data-copy]').forEach((b) => (b.onclick = () => copyText(joinUrl(b.dataset.copy))));

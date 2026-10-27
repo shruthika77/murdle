@@ -81,6 +81,23 @@ The anon key is meant to be public. Security comes from Row Level Security and t
 
 ## What's new in this version
 
+- **Number of rounds:** choose how many rounds a game has when you create it (1 to 20, default 3). The host console,
+  projector and team lobby show a round tracker (closed, in play, sealed, final), the banner says "Level 2 of 5" or
+  "Final level", and Start becomes "Start the final round" on the last one. Change it any time under *Rules and scoring*.
+  Rounds you cancel during the countdown still count, so raise the number if you need an extra one.
+- **Crown the winners:** when the final round ends, the host console shows a **Crown the winners** button. It finishes
+  the game and plays a winners ceremony on every screen: spotlights, a drum roll, then 3rd, 2nd and 1st place rise on
+  bronze, silver and gold podiums, a crown drops on the champions, with a fanfare and confetti. Teams outside the top
+  three see where they finished. The projector can replay the ceremony.
+- **New projector join card:** an admission ticket with a QR code to scan, the game code as big letter tiles, the short
+  link, and live counts of teams, detectives and players who are ready.
+- **New colours:** a violet-ink night with a warm peach accent, mint and rose. Gold, silver and bronze are only used for
+  the winners.
+
+No database migration is needed: the number of rounds is stored in the game's existing settings.
+
+## Earlier updates
+
 - **One game view on every screen:** teams now see the same layout as the projector and the host console: a big case
   banner with the round clock, the case file on the left, and the deduction grid plus the answer card on the right.
   Teams also get their attempts, hints and answer form in that right column, and their notebook under the case file.

@@ -1,4 +1,5 @@
 import { sb, client } from './supabase.js';
+import { winnersCeremony } from './fx.js';
 import { debounce, esc, avatar, avatarStack, icon, ago, fmtTime } from './ui.js';
 import { rankFor } from './themes.js';
 
@@ -197,12 +198,76 @@ export function awardsHtml(st) {
   return `<div class="awards">${a.map((x) => `<div class="award"><div class="ai">${x.icon}</div><div><div class="eyebrow">${x.title}</div><div class="b">${esc(x.team)}</div><div class="muted sm">${esc(x.note)}</div></div></div>`).join('')}</div>`;
 }
 
-/** Podium for the final screen. */
+/** Podium for the final screen: gold, silver and bronze blocks with a crown for the champions. */
 export function podiumHtml(st) {
   const rows = standings(st).slice(0, 3);
   if (!rows.length) return '';
   const order = rows.length === 1 ? [0] : rows.length === 2 ? [1, 0] : [1, 0, 2];
+  const medal = ['🥇', '🥈', '🥉'];
   return `<div class="podium">${order.map((i) => { const x = rows[i]; return `<div class="pd p${i + 1}">
-      <div class="pd-who">${avatarStack(x.team.team_members, true)}<div class="b">${esc(x.team.name)}</div><div class="score">${x.total}</div></div>
-      <div class="pd-block"><span>${i + 1}</span></div></div>`; }).join('')}</div>`;
+      <div class="pd-who">${i === 0 ? '<span class="pd-crown" aria-hidden="true">👑</span>' : ''}${avatarStack(x.team.team_members, true)}
+        <div class="pd-name">${esc(x.team.name)}</div><div class="pd-pts">${x.total} pts</div></div>
+      <div class="pd-block"><span class="pd-medal" aria-hidden="true">${medal[i]}</span><span class="pd-no">${i + 1}</span></div></div>`; }).join('')}</div>`;
+}
+
+/* ---------- planned number of rounds ---------- */
+/**
+ * total: rounds the host planned (null for older games without the setting).
+ * played: rounds started so far. finalDone: the last planned round has finished, so it's time to crown the winners.
+ */
+export function roundPlan(st, nowMs = Date.now()) {
+  const total = Number(st.game.settings?.total_rounds) || null;
+  const played = st.rounds.length;
+  const cur = st.current, p = phase(cur, nowMs);
+  const isFinal = (r) => !!(total && r && r.round_no >= total);
+  return {
+    total, played, isFinal,
+    left: total ? Math.max(0, total - played) : null,
+    allStarted: !!(total && played >= total),
+    finalDone: !!(total && played >= total && cur && isFinal(cur) && p === 'closed'),
+  };
+}
+
+/** "Level 2 of 5", or "Final level" on the last one. */
+export function levelLabel(st, r) {
+  const { total, isFinal } = roundPlan(st);
+  if (!r) return '';
+  return isFinal(r) ? `Final level (${r.round_no} of ${total})` : total ? `Level ${r.round_no} of ${total}` : `Level ${r.round_no}`;
+}
+
+/** A row of case folders, one per planned round: done, in play, still to come, and the final one. */
+export function roundTrackHtml(st, nowMs = Date.now()) {
+  const { total } = roundPlan(st, nowMs);
+  const n = Math.max(total || 0, st.rounds.length);
+  if (!n) return '';
+  const cur = st.current, p = phase(cur, nowMs), finished = st.game.status === 'finished';
+  const items = [...Array(n).keys()].map((i) => {
+    const no = i + 1, r = st.rounds.find((x) => x.round_no === no);
+    const live = r && cur && r.id === cur.id && (p === 'live' || p === 'countdown') && !finished;
+    const state = live ? 'now' : r ? 'done' : 'todo';
+    const fin = total && no === total;
+    const solved = r ? st.results.filter((x) => x.round_id === r.id && x.solved).length : 0;
+    const tip = r ? `${r.title}${state === 'done' ? `: ${solved} team${solved === 1 ? '' : 's'} solved it` : ''}` : fin ? 'The final case' : 'Still sealed';
+    return `<li class="rt ${state}${fin ? ' fin' : ''}" title="${esc(tip)}"><span class="rt-tab">${fin ? '★' : no}</span>
+      <span class="rt-l">${state === 'now' ? 'In play' : state === 'done' ? (fin ? 'Final' : 'Closed') : fin ? 'Final' : 'Sealed'}</span></li>`;
+  }).join('');
+  return `<ol class="rtrack" aria-label="Rounds">${items}</ol>`;
+}
+
+/** Top three teams, ready for the winners ceremony. */
+export function winnersData(st) {
+  return standings(st).slice(0, 3).map((x, i) => ({
+    place: i + 1, id: x.team.id, name: x.team.name, total: x.total, solved: x.solved,
+    avatars: avatarStack(x.team.team_members, true), rank: rankFor(x.total),
+  }));
+}
+
+/** Plays the winners ceremony once per device when the game is finished. */
+export function crownOnce(st, { meTeamId = null, scope = 'screen' } = {}) {
+  if (st.game.status !== 'finished' || !st.teams.length) return;
+  const k = `cc_crowned:${scope}:${st.game.id}`;   // per screen type, so a projector tab in the host's browser still plays it
+  try { if (localStorage.getItem(k)) return; localStorage.setItem(k, '1'); } catch { /* storage blocked: still play */ }
+  const rows = standings(st), pos = meTeamId ? rows.findIndex((x) => x.team.id === meTeamId) : -1;
+  const meLine = pos >= 3 ? `Your team finished #${pos + 1} of ${rows.length} with ${rows[pos].total} points. Great detective work!` : '';
+  winnersCeremony(winnersData(st), { title: st.game.title, meTeamId, meLine });
 }

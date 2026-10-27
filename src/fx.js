@@ -9,7 +9,7 @@ const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 export function confetti(n = 90) {
   if (reduced()) return;
   const box = document.createElement('div'); box.className = 'confetti'; box.setAttribute('aria-hidden', 'true');
-  const cols = ['#ffd23f', '#e2384d', '#3ec5b7', '#f6f1e7', '#8e7cc3'];
+  const cols = ['#ff9f7a', '#ff5d73', '#4fd6be', '#f7f3ee', '#9d8cf2', '#f5c451'];
   for (let i = 0; i < n; i++) {
     const p = document.createElement('i');
     p.style.cssText = `left:${Math.random() * 100}%;background:${cols[i % cols.length]};animation-delay:${Math.random() * 0.6}s;animation-duration:${2 + Math.random() * 1.6}s;--r:${Math.random() * 720 - 360}deg;--x:${Math.random() * 160 - 80}px`;
@@ -45,4 +45,47 @@ export function revealCeremony(reveal, title = '') {
   root.querySelector('.cer-x').onclick = close;
   root.addEventListener('click', (e) => { if (e.target === root) close(); });
   setTimeout(close, 8000);
+}
+
+/**
+ * Winners ceremony for the end of the game. Runs on every screen when the host crowns the winners:
+ * spotlights sweep, then 3rd, 2nd and 1st place rise one by one, a crown drops on the champions,
+ * and the room gets a fanfare and confetti.
+ * winners: [{ place, name, total, solved, avatars (html), rank }] (already escaped html in `avatars` only).
+ */
+export function winnersCeremony(winners, { title = '', meTeamId = null, meLine = '' } = {}) {
+  if (!winners?.length || document.querySelector('.crowning')) return;
+  const fast = reduced();
+  const at = { 3: 900, 2: 2600, 1: 4600 };
+  const order = winners.length === 1 ? [1] : winners.length === 2 ? [2, 1] : [2, 1, 3];
+  const label = { 1: 'Champions', 2: 'Second place', 3: 'Third place' };
+  const medal = { 1: '🥇', 2: '🥈', 3: '🥉' };
+  const root = document.createElement('div');
+  root.className = 'crowning'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-label', 'Winners');
+  root.innerHTML = `<div class="cr-beams" aria-hidden="true"><i></i><i></i></div>
+    <div class="cr-in">
+      <div class="cr-k">${esc(title)}</div>
+      <h2 class="cr-h">The top detectives are…</h2>
+      <div class="cr-podium">${order.map((p) => { const w = winners.find((x) => x.place === p); if (!w) return '';
+        return `<div class="cr-col c${p}${w.id === meTeamId ? ' me' : ''}" style="--d:${fast ? 0 : at[p]}ms">
+          <div class="cr-card">${p === 1 ? '<div class="cr-crown" aria-hidden="true">👑</div>' : ''}
+            <div class="cr-av">${w.avatars}</div><div class="cr-name">${esc(w.name)}</div>
+            <div class="cr-pts">${w.total} points</div><div class="cr-lbl">${medal[p]} ${label[p]}</div>
+            ${w.id === meTeamId ? '<div class="cr-you">That’s your team!</div>' : ''}</div>
+          <div class="cr-block"><span>${p}</span></div></div>`; }).join('')}</div>
+      ${meLine ? `<p class="cr-me">${esc(meLine)}</p>` : ''}
+      <button class="btn cr-x" type="button">See the final standings</button>
+    </div>`;
+  document.body.appendChild(root);
+  if (fast) { confetti(120); sfx.fanfare(); }
+  else {
+    order.slice().sort((a, b) => b - a).forEach((p) => {
+      setTimeout(() => sfx.drumroll(p === 1 ? 1.4 : 0.8), Math.max(0, at[p] - (p === 1 ? 1400 : 800)));
+      setTimeout(() => { if (p === 1) { sfx.fanfare(); sfx.cheer(); confetti(160); } else { sfx.stamp(); confetti(50); } }, at[p] + 350);
+    });
+    setTimeout(() => confetti(140), at[1] + 2200);
+  }
+  const close = () => { root.classList.add('out'); setTimeout(() => root.remove(), 350); };
+  root.querySelector('.cr-x').onclick = close;
+  document.addEventListener('keydown', function k(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', k); } });
 }

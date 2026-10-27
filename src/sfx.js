@@ -38,4 +38,16 @@ export const sfx = {
   stamp: () => { noise(0.25, 0.4); tone(90, 0.3, { type: 'sine', vol: 0.3, slide: -40 }); },
   sting: () => { tone(196, 0.6, { type: 'sawtooth', vol: 0.07 }); tone(233, 0.6, { type: 'sawtooth', vol: 0.05, at: 0.05 }); tone(277, 0.9, { type: 'sawtooth', vol: 0.05, at: 0.1 }); },
   pop: () => tone(660, 0.07, { type: 'sine', vol: 0.1, slide: 300 }),
+  /** Snare-style roll that speeds up, for the build-up before each podium place. */
+  drumroll: (secs = 1.2) => { let t = 0, gap = 0.09; while (t < secs) { noise(0.05, 0.12, t); t += gap; gap = Math.max(0.035, gap * 0.94); } },
+  /** Short brass-like fanfare for the champions. */
+  fanfare: () => {
+    [[523, 0], [523, 0.16], [523, 0.32], [659, 0.5], [784, 0.9], [659, 1.15], [784, 1.3], [1047, 1.5]].forEach(([f, at], i) => {
+      tone(f, i === 7 ? 1.1 : 0.22, { type: 'sawtooth', vol: 0.07, at });
+      tone(f / 2, i === 7 ? 1.1 : 0.22, { type: 'triangle', vol: 0.08, at });
+    });
+    noise(0.6, 0.18, 1.5);
+  },
+  /** Crowd-style cheer: a wash of filtered noise. */
+  cheer: () => { for (let i = 0; i < 6; i++) noise(0.5, 0.06, i * 0.12); },
 };

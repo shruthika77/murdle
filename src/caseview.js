@@ -44,10 +44,10 @@ export function answerCardHtml(r) {
  * Draws the banner, case file, grid and answer card for round `r`.
  * Returns the grid handle (or null while the case text is still loading).
  */
-export function drawCaseView(root, { r, content, phase, ruled = new Set(), gridKey, note = '' }) {
+export function drawCaseView(root, { r, content, phase, ruled = new Set(), gridKey, note = '', label = '' }) {
   const q = (s) => root.querySelector(s);
   const sol = r.revealed && r.reveal ? r.reveal.solution : null;
-  q('.cv-banner').innerHTML = caseBanner(r, content, { big: true, right: timerSlot(phase) });
+  q('.cv-banner').innerHTML = caseBanner(r, content, { big: true, right: timerSlot(phase), label });
   q('.cv-case').innerHTML = content ? caseHtml(content, esc, ruled) : '<p class="muted">Opening the case file…</p>';
   q('.cv-note').textContent = note;
   q('.cv-answer').innerHTML = answerCardHtml(r);
