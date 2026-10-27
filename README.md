@@ -81,6 +81,20 @@ The anon key is meant to be public. Security comes from Row Level Security and t
 
 ## What's new in this version
 
+- **One game view on every screen:** teams now see the same layout as the projector and the host console: a big case
+  banner with the round clock, the case file on the left, and the deduction grid plus the answer card on the right.
+  Teams also get their attempts, hints and answer form in that right column, and their notebook under the case file.
+  The host console shows the same view at full width, with **Stop round** and **Reveal answer** buttons in the header.
+- **Grid tools for teams and hosts:** **Undo** / **Redo**, a **Smart marks** switch, and a **Clear** menu with
+  *Smart marks only*, *All ✗ marks* (keeps every ✓), one section at a time, or *Everything*.
+- **Smarter Smart marks:** they now also reason across sections (Library = Lady Ash and Library = Rope means
+  Rope = Lady Ash), only ever fill blank squares, and are drawn lighter so you can tell them from your own marks.
+- **Contradiction check:** two ✓ in one row or column, or a row that is all ✗, is outlined in red with a short warning.
+- **Cleaner grid colours:** the yellow paper and gold answer highlight are replaced with an ink-on-white grid that
+  matches the night-blue theme. The revealed answer is framed in navy with a red evidence pin.
+
+## Earlier changes
+
 - **Projector shows the full round:** when the countdown ends, the projector shows the same case file and deduction grid
   the teams see. The host can mark the grid there to walk the room through the logic. The answer stays sealed, for the
   host too, until **Reveal answer** is pressed; then the answer squares are highlighted in gold. The host console shows

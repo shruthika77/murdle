@@ -2,9 +2,8 @@ import { sb, whoAmI, syncClock, serverNow } from '../supabase.js';
 import { esc, topbar, $, guard, toast, fmtTime, flash, copyText, icon, badge, showGetReady, hideGetReady } from '../ui.js';
 import { loadState, loadContent, standings, subscribe, newSolves, leaderboardHtml, rosterHtml, counts, phase, feedHtml, podiumHtml, awardsHtml } from '../data.js';
 import { mountAvatarPicker, sanitize } from '../avatars.js';
-import { caseHtml } from '../puzzles.js';
-import { mountGrid } from '../grid.js';
-import { caseBanner, rankFor } from '../themes.js';
+import { caseViewShell, drawCaseView, setCaseViewTime } from '../caseview.js';
+import { rankFor } from '../themes.js';
 import { revealCeremony } from '../fx.js';
 import { sfx } from '../sfx.js';
 import { downloadDossier } from '../dossier.js';
@@ -33,9 +32,11 @@ export async function mount(app, [gameId]) {
   app.innerHTML = topbar(`<span class="badge brand">${icon('users', 13)} ${esc(me.name)}</span>`) + `
     <main class="wrap">
       <div id="banner"></div><div id="finale"></div>
-      <div id="game" class="hidden"><div class="cols play">
-        <div class="stack"><div id="puzzle"></div><div id="grid"></div></div>
-        <div class="stack side"><div id="panel"></div><div id="form"></div></div></div></div>
+      <div id="game" class="hidden">${caseViewShell({
+        gridTitle: 'Team deduction grid',
+        leftExtra: '<div id="notebook"></div>',
+        sideExtra: '<div id="panel"></div><div id="form"></div>',
+      })}</div>
       <div id="lobby" class="hidden"></div>
       <div class="cols even mt"><div class="card flush"><div class="card-h"><h3>${icon('trophy', 17)} Leaderboard</h3><span class="muted xs">Detective rank grows with your points</span></div><div id="lb"></div></div>
         <div class="card flush"><div class="card-h"><h3>${icon('flag', 17)} Live activity</h3></div><div id="feed"></div></div></div>
@@ -94,26 +95,19 @@ export async function mount(app, [gameId]) {
   // ---------- case file + grid ----------
   const gridKey = () => `cc-grid2:${st.current.id}:${me.id}`;
   const notesKey = () => `cc-notes:${st.current.id}:${me.id}`;
-  function drawPuzzle() {
+  function drawCase() {
     const r = st.current;
-    if (!content) { $('#puzzle').innerHTML = `<div class="card"><p class="muted">Opening the case file…</p></div>`; return; }
-    $('#puzzle').innerHTML = `<div class="card flush">${caseBanner(r, content)}<div class="paper pad">
-      ${caseHtml(content, esc, new Set(hints.map((h) => h.value)))}
-      ${r.revealed && r.reveal ? `<div class="callout ok mt"><b>Answer:</b> ${esc(r.reveal.solution.suspect)} with the ${esc(r.reveal.solution.weapon)} in the ${esc(r.reveal.solution.location)}
-        <p class="sm" style="margin:6px 0 0;color:var(--ink)">${esc(r.reveal.explanation || '')}</p></div>` : ''}</div></div>`;
+    drawCaseView($('#game'), {
+      r, content, phase: ph(), ruled: new Set(hints.map((h) => h.value)), gridKey: gridKey(),
+      note: 'Your marks are saved on this device.',
+    });
   }
-  function drawGrid() {
-    if (!content) { $('#grid').innerHTML = ''; return; }
-    const r = st.current, sol = r.revealed && r.reveal ? r.reveal.solution : null;
+  function drawNotebook() {
+    if (!content) { $('#notebook').innerHTML = ''; return; }
     let notes = '';
     try { notes = localStorage.getItem(notesKey()) || ''; } catch { /* ignore */ }
-    $('#grid').innerHTML = `<div class="card"><div class="card-h"><h3>${icon('search', 17)} Deduction grid</h3>
-      <button class="btn sm ghost" id="clr">Clear grid</button></div><div id="gbox"></div>
-      <p class="muted xs mt-2">Your marks are saved on this device.</p></div>
-      <div class="card notebook"><div class="card-h"><h3>📒 Detective notebook</h3><span class="muted xs" id="nsv"></span></div>
+    $('#notebook').innerHTML = `<div class="card notebook"><div class="card-h"><h3>📒 Detective notebook</h3><span class="muted xs" id="nsv"></span></div>
       <textarea id="notes" maxlength="2000" placeholder="Jot down hunches, alibis and contradictions…" aria-label="Detective notebook">${esc(notes)}</textarea></div>`;
-    const g = mountGrid($('#gbox'), content, gridKey(), { solution: sol });
-    $('#clr').onclick = () => { if (confirm('Clear your grid?')) g.clear(); };
     $('#notes').oninput = (e) => {
       try { localStorage.setItem(notesKey(), e.target.value); $('#nsv').textContent = 'Saved on this device'; } catch { /* ignore */ }
     };
@@ -128,11 +122,8 @@ export async function mount(app, [gameId]) {
     const hist = attempts.length ? `<ul class="hist">${attempts.map((a, i) =>
       `<li><span>Try ${i + 1}: ${esc(a.answer.suspect)}, ${esc(a.answer.weapon)}, ${esc(a.answer.location)}</span>
        <b style="color:${a.correct_count === 3 ? 'var(--ok)' : 'var(--muted)'}">${a.correct_count}/3</b></li>`).join('')}</ul>` : '';
-    $('#panel').innerHTML = `<div class="card">
-      ${p === 'live'
-        ? `<div class="timer-box"><div class="kicker">Time left</div><div class="time" id="tm">–:––</div><div class="bar"><i id="tb" style="width:100%"></i></div></div>`
-        : `<div class="center">${badge('ok', 'Round closed')}</div>`}
-      <div class="flex between mt"><span class="muted sm">Attempts</span><b>${res.attempts} / ${r.settings.max_attempts}</b></div>
+    $('#panel').innerHTML = `<div class="card"><div class="card-h"><h3>${icon('users', 17)} ${esc(me.name)}</h3>${p === 'live' ? badge('live', 'Investigating') : badge('ok', 'Round closed')}</div>
+      <div class="flex between"><span class="muted sm">Attempts</span><b>${res.attempts} / ${r.settings.max_attempts}</b></div>
       ${res.solved ? `<div class="callout ok mt-2"><b>Solved! +${res.score} points</b></div>`
         : res.done ? `<div class="callout warn mt-2"><b>Finished.</b> ${res.score} points</div>` : ''}
       ${hist}
@@ -213,9 +204,13 @@ export async function mount(app, [gameId]) {
     drawLb();
     if (!showGame) { keys.puzzle = keys.form = ''; return; }
     drawPanel();
-    const pk = r.id + '|' + r.revealed + '|' + (content ? 1 : 0) + '|' + hints.length;
+    const pk = [r.id, r.revealed && r.reveal ? 1 : 0, content ? 1 : 0, hints.length, p].join('|');
     const fk = [r.id, r.status, myResult().done, attempts.length, p, content ? 1 : 0, hints.length].join('|');
-    if (pk !== keys.puzzle) { keys.puzzle = pk; drawPuzzle(); drawGrid(); }
+    if (pk !== keys.puzzle) {
+      const nbChanged = !keys.puzzle || keys.puzzle.split('|')[0] !== String(r.id) || keys.puzzle.split('|')[2] !== (content ? '1' : '0');
+      keys.puzzle = pk; drawCase();
+      if (nbChanged) drawNotebook();                 // keep what's being typed when only hints/phase change
+    }
     if (fk !== keys.form) { keys.form = fk; drawForm(); }
   }
 
@@ -257,9 +252,7 @@ export async function mount(app, [gameId]) {
     if (contentFor !== r.id && Date.now() - lastRetry > 2000) { lastRetry = Date.now(); refresh(true).catch(() => {}); }
     const left = (new Date(r.ends_at).getTime() - serverNow()) / 1000;
     const total = Math.max(1, (new Date(r.ends_at) - new Date(r.started_at)) / 1000);
-    const el = $('#tm'), bar = $('#tb');
-    if (el) { el.textContent = fmtTime(left); el.classList.toggle('low', left <= 30); }
-    if (bar) { bar.style.width = Math.max(0, Math.min(100, (left / total) * 100)) + '%'; bar.classList.toggle('low', left <= 30); }
+    setCaseViewTime($('#game'), left, total);
     document.body.classList.toggle('tense', left <= 30 && left > 0 && !myResult()?.done);
     const sec = Math.ceil(left);
     if (sec !== lastSec) { lastSec = sec; if (sec <= 10 && sec > 0 && !myResult()?.done) sfx.tick(); }

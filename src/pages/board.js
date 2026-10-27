@@ -1,9 +1,7 @@
 import { sb, setMode, hostIdentity, playerIdentity, syncClock, serverNow } from '../supabase.js';
-import { esc, topbar, $, $$, fmtTime, flash, joinUrl, icon, badge, showGetReady, hideGetReady } from '../ui.js';
+import { esc, topbar, $, $$, flash, joinUrl, icon, badge, showGetReady, hideGetReady } from '../ui.js';
 import { loadState, loadContent, subscribe, newSolves, scoreboardHtml, rosterHtml, counts, phase, feedHtml, podiumHtml, awardsHtml } from '../data.js';
-import { caseHtml } from '../puzzles.js';
-import { mountGrid } from '../grid.js';
-import { caseBanner } from '../themes.js';
+import { caseViewShell, drawCaseView, setCaseViewTime } from '../caseview.js';
 import { avatarSvg } from '../avatars.js';
 import { revealCeremony } from '../fx.js';
 import { sfx } from '../sfx.js';
@@ -27,7 +25,7 @@ export async function mount(app, [gameId]) {
   document.body.classList.add('projector');
 
   let st = await loadState(gameId), prev = st, lastSig = '', closing = false, lastPh = '', content = null, contentFor = null;
-  let caseKey = '', grid = null, sortBy = 'total', seenReveal = new Set(), lastSec = -1, lastRetry = 0;
+  let caseKey = '', sortBy = 'total', seenReveal = new Set(), lastSec = -1, lastRetry = 0;
   const isHost = st.game.host_id === who.user.id;
   const ph = () => phase(st.current, serverNow());
   st.rounds.filter((r) => r.revealed).forEach((r) => seenReveal.add(r.id));   // don't replay old reveals
@@ -35,12 +33,7 @@ export async function mount(app, [gameId]) {
   app.innerHTML = topbar(`<a class="btn sm sec" href="${isHost ? '#/admin/game/' + gameId : '#/play/' + gameId}">Back</a>`) + `
     <main class="wrap"><div class="page-h"><div class="flex gap-3"><div id="host"></div><div><div class="kicker">Projector</div><h1 id="title"></h1></div></div><div id="status"></div></div>
       <div id="join"></div><div id="finale"></div>
-      <div id="casewrap" class="hidden"><div id="banner"></div>
-        <div class="cols proj"><div class="card paper" id="case"></div>
-          <div class="stack side"><div class="card"><div class="card-h"><h3>${icon('search', 18)} Room deduction grid</h3>
-            <button class="btn sm ghost" id="clr">Clear</button></div><div id="grid"></div>
-            <p class="muted xs mt-2">${isHost ? 'Mark the grid here to walk the room through the logic. Marks stay on this screen only.' : 'Marks stay on this screen only.'}</p></div>
-            <div id="answer"></div></div></div></div>
+      <div id="casewrap" class="hidden">${caseViewShell({ gridTitle: 'Room deduction grid' })}</div>
       <div id="lobby"></div>
       <div class="card flush mt"><div class="card-h"><h3>${icon('trophy', 18)} Scoreboard</h3>
         <div class="seg" role="group" aria-label="Rank teams by"><button data-sort="total" aria-pressed="true">Overall</button><button data-sort="round" aria-pressed="false">This round</button></div></div><div id="sb"></div></div>
@@ -49,7 +42,6 @@ export async function mount(app, [gameId]) {
   $$('[data-sort]').forEach((b) => (b.onclick = () => {
     sortBy = b.dataset.sort; $$('[data-sort]').forEach((x) => x.setAttribute('aria-pressed', x === b)); drawBoard();
   }));
-  $('#clr').onclick = () => { if (grid && confirm('Clear the room grid?')) grid.clear(); };
 
   async function ensureContent() {
     const r = st.current, p = ph();
@@ -69,18 +61,13 @@ export async function mount(app, [gameId]) {
     const show = !finished && r && (p === 'live' || p === 'closed');
     $('#casewrap').classList.toggle('hidden', !show);
     if (!show) { caseKey = ''; return; }
-    const sol = r.revealed && r.reveal ? r.reveal.solution : null;
-    const key = [r.id, content ? 1 : 0, sol ? 1 : 0].join('|');
+    const key = [r.id, content ? 1 : 0, r.revealed && r.reveal ? 1 : 0, p].join('|');
     if (key === caseKey) return;
     caseKey = key;
-    $('#banner').innerHTML = caseBanner(r, content, { big: true, right: `<div class="cb-timer" id="btwrap">${p === 'live' ? '<div class="time" id="bt">–:––</div><div class="xs">time left</div>' : badge('ok', 'Round closed')}</div>` });
-    $('#case').innerHTML = content ? caseHtml(content, esc) : '<p class="muted">Opening the case file…</p>';
-    if (content) grid = mountGrid($('#grid'), content, `cc-proj-grid:${r.id}`, { solution: sol });
-    else $('#grid').innerHTML = '<p class="muted">The grid appears with the case file.</p>';
-    $('#answer').innerHTML = sol
-      ? `<div class="card answer"><div class="kicker">Solution</div><p class="ans"><b>${esc(sol.suspect)}</b> with the <b>${esc(sol.weapon)}</b> in the <b>${esc(sol.location)}</b></p>
-          <p class="sm">${esc(r.reveal.explanation || '')}</p></div>`
-      : `<div class="card sealed"><div class="seal" aria-hidden="true">🔒</div><div><b>Answer sealed</b><p class="muted sm" style="margin:0">Hidden from everyone, the host included, until “Reveal answer” is pressed.</p></div></div>`;
+    drawCaseView($('#casewrap'), {
+      r, content, phase: p, gridKey: `cc-proj-grid:${r.id}`,
+      note: isHost ? 'Mark the grid here to walk the room through the logic. Marks stay on this screen only.' : 'Marks stay on this screen only.',
+    });
   }
 
   function draw() {
@@ -128,8 +115,7 @@ export async function mount(app, [gameId]) {
     if (p !== 'live') return;
     if (contentFor !== r.id && Date.now() - lastRetry > 2000) { lastRetry = Date.now(); refresh(true).catch(() => {}); }   // case text not loaded yet: keep trying
     const left = (new Date(r.ends_at).getTime() - serverNow()) / 1000;
-    const el = $('#bt');
-    if (el) { el.textContent = fmtTime(left); el.classList.toggle('low', left <= 30); }
+    setCaseViewTime($('#casewrap'), left, (new Date(r.ends_at) - new Date(r.started_at)) / 1000);
     document.body.classList.toggle('tense', left <= 30 && left > 0);
     const sec = Math.ceil(left);
     if (sec !== lastSec) { lastSec = sec; if (sec <= 10 && sec > 0) sfx.tick(); }
