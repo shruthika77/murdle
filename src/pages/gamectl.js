@@ -40,14 +40,33 @@ export async function mount(app, [gameId]) {
 
   const cfg = () => ({ ...DEFAULTS, ...st.game.settings });
 
+  /* +15 seconds: host only. The server checks that the caller is the host and the round is still running. */
+  function bindAddTime() {
+    $$('[data-addtime]').forEach((b) => {
+      if (b.dataset.bound) return; b.dataset.bound = '1';
+      guard(b, async () => {
+        const cur = st.current;
+        if (!cur || phase(cur, serverNow()) !== 'live') throw new Error('Time can only be added while a round is running.');
+        const { data, error } = await sb.rpc('extend_round', { p_round: cur.id, p_seconds: 15 });
+        if (error) throw new Error(/extend_round/.test(error.message)
+          ? 'Adding time needs a database update: run supabase/migration_005_add_time.sql in the Supabase SQL editor.' : error.message);
+        if (data) cur.ends_at = data;                   // update the clock right away; realtime tells everyone else
+        toast('+15 seconds added for every team');
+        await refresh();
+      });
+    });
+  }
+
   function drawHdr() {
     const g = st.game, cur = st.current, p = phase(cur, serverNow());
     $('#hdr').innerHTML = `<div class="page-h"><div><div class="eyebrow">Game console</div>
       <div class="flex wrapf"><h1 style="font-size:34px">${esc(g.title)}</h1>${statusBadge(g.status)}</div></div>
-      <div class="flex wrapf">${cur && p === 'live' ? `<button class="btn sec" id="hstop">${icon('stop', 15)} Stop round</button>` : ''}
+      <div class="flex wrapf">${cur && p === 'live' ? `<button class="btn addtime" data-addtime title="Give every team 15 more seconds">${icon('clock', 16)} +15 sec</button>
+        <button class="btn sec" id="hstop">${icon('stop', 15)} Stop round</button>` : ''}
       ${cur && (p === 'live' || p === 'closed') && !cur.revealed ? `<button class="btn sec" id="hrev">${icon('eye', 16)} Reveal answer</button>` : ''}
       <a class="btn sec" href="#/board/${g.id}" target="_blank" rel="noopener">${icon('monitor', 16)} Projector view</a>
       ${g.status !== 'finished' ? `<button class="btn danger" id="fin">${icon('flag', 16)} Finish game</button>` : ''}</div></div>`;
+    bindAddTime();
     guard($('#hstop'), async () => {
       if (!confirm('Stop the round now for every team?')) return;
       const { error } = await sb.rpc('stop_round', { p_round: cur.id });
@@ -130,7 +149,8 @@ export async function mount(app, [gameId]) {
       h += `<p class="muted sm mt-2">The answer stays hidden from everyone, including you, until you reveal it.</p>`;
     }
     if (cur && ph !== 'cancelled') {
-      h += `<div class="flex wrapf mt-2">${ph === 'live' ? `<button class="btn danger sm" id="stop">${icon('stop', 14)} Stop round</button>` : ''}
+      h += `<div class="flex wrapf mt-2">${ph === 'live' ? `<button class="btn addtime sm" data-addtime title="Give every team 15 more seconds">${icon('clock', 14)} +15 seconds</button>
+        <button class="btn danger sm" id="stop">${icon('stop', 14)} Stop round</button>` : ''}
         ${!cur.revealed ? `<button class="btn sec sm" id="rev">${icon('eye', 14)} Reveal answer</button>` : '<span class="badge ok">Answer revealed</span>'}</div>`;
     }
 
@@ -177,6 +197,7 @@ export async function mount(app, [gameId]) {
       if (error) throw new Error(error.message);
       chosen = ''; await refresh();
     });
+    bindAddTime();
     guard($('#stop'), async () => {
       const { error } = await sb.rpc('stop_round', { p_round: cur.id });
       if (error) throw new Error(error.message);

@@ -165,6 +165,7 @@ export function feedHtml(feed) {
       case 'solved': return [icon('trophy', 15), `${t} cracked the case in <b>${fmtTime(e.detail.seconds || 0)}</b> (+${e.detail.score})`];
       case 'hint': return [icon('book', 15), `${t} bought a detective hint`];
       case 'revealed': return [icon('eye', 15), `The answer was revealed`];
+      case 'time_added': return [icon('clock', 15), `The host added <b>${Number(e.detail.seconds) || 15} seconds</b> to the clock`];
       default: return [icon('flag', 15), esc(e.kind)];
     }
   };
@@ -270,4 +271,11 @@ export function crownOnce(st, { meTeamId = null, scope = 'screen' } = {}) {
   const rows = standings(st), pos = meTeamId ? rows.findIndex((x) => x.team.id === meTeamId) : -1;
   const meLine = pos >= 3 ? `Your team finished #${pos + 1} of ${rows.length} with ${rows[pos].total} points. Great detective work!` : '';
   winnersCeremony(winnersData(st), { title: st.game.title, meTeamId, meLine });
+}
+
+/** Seconds the host added to the current round since the previous refresh (0 if none). */
+export function timeAdded(prev, st) {
+  const a = prev?.current, b = st.current;
+  if (!a || !b || a.id !== b.id) return 0;
+  return Math.round((new Date(b.ends_at) - new Date(a.ends_at)) / 1000);
 }

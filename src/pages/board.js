@@ -1,6 +1,6 @@
 import { sb, setMode, hostIdentity, playerIdentity, syncClock, serverNow } from '../supabase.js';
 import { esc, topbar, $, $$, flash, joinUrl, icon, showGetReady, hideGetReady } from '../ui.js';
-import { loadState, loadContent, subscribe, newSolves, scoreboardHtml, rosterHtml, counts, phase, feedHtml, podiumHtml, awardsHtml, levelLabel, roundPlan, roundTrackHtml, crownOnce, winnersData } from '../data.js';
+import { loadState, loadContent, subscribe, newSolves, scoreboardHtml, rosterHtml, counts, phase, feedHtml, podiumHtml, awardsHtml, levelLabel, roundPlan, roundTrackHtml, crownOnce, winnersData, timeAdded } from '../data.js';
 import { caseViewShell, drawCaseView, setCaseViewTime } from '../caseview.js';
 import { avatarSvg } from '../avatars.js';
 import { revealCeremony, winnersCeremony } from '../fx.js';
@@ -145,6 +145,12 @@ export async function mount(app, [gameId]) {
     if (!force && s === lastSig) return;
     lastSig = s;
     newSolves(prev, st).slice(0, 1).forEach((n) => flash(n));
+    const extra = timeAdded(prev, st);
+    if (extra > 0) {
+      sfx.beep(true);
+      const el = document.querySelector('#casewrap .cb-timer');
+      if (el) { el.dataset.plus = `+${extra}s`; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+    }
     const r = st.current;
     if (r && r.revealed && r.reveal && !seenReveal.has(r.id)) { seenReveal.add(r.id); revealCeremony(r.reveal, r.title); }
     draw();

@@ -81,6 +81,13 @@ The anon key is meant to be public. Security comes from Row Level Security and t
 
 ## What's new in this version
 
+- **+15 seconds (host only):** while a round is running, the host console has a **+15 sec** button in the header and in
+  Round control. Each press adds 15 seconds to the clock for every team. Phones and the projector update straight away,
+  the clock pops with a "+15s" tag, and the live feed shows it. Only the game's host can do this: the database checks it.
+  **Run `supabase/migration_005_add_time.sql` once in the Supabase SQL editor** to turn it on (fresh projects get it from
+  `schema.sql`). Adding time doesn't raise the speed bonus, which is still based on the round time you set.
+
+
 - **Number of rounds:** choose how many rounds a game has when you create it (1 to 20, default 3). The host console,
   projector and team lobby show a round tracker (closed, in play, sealed, final), the banner says "Level 2 of 5" or
   "Final level", and Start becomes "Start the final round" on the last one. Change it any time under *Rules and scoring*.

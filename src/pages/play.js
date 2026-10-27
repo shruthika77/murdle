@@ -1,6 +1,6 @@
 import { sb, whoAmI, syncClock, serverNow } from '../supabase.js';
 import { esc, topbar, $, guard, toast, fmtTime, flash, copyText, icon, badge, showGetReady, hideGetReady } from '../ui.js';
-import { loadState, loadContent, standings, subscribe, newSolves, leaderboardHtml, rosterHtml, counts, phase, feedHtml, podiumHtml, awardsHtml, levelLabel, roundPlan, roundTrackHtml, crownOnce } from '../data.js';
+import { loadState, loadContent, standings, subscribe, newSolves, leaderboardHtml, rosterHtml, counts, phase, feedHtml, podiumHtml, awardsHtml, levelLabel, roundPlan, roundTrackHtml, crownOnce, timeAdded } from '../data.js';
 import { mountAvatarPicker, sanitize } from '../avatars.js';
 import { caseViewShell, drawCaseView, setCaseViewTime } from '../caseview.js';
 import { rankFor } from '../themes.js';
@@ -220,6 +220,7 @@ export async function mount(app, [gameId]) {
     if (fk !== keys.form) { keys.form = fk; drawForm(); }
   }
 
+  const bumpClock = (n) => { const el = document.querySelector('#game .cb-timer'); if (el) { el.dataset.plus = `+${n}s`; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } };
   async function refresh(force = false) {
     prev = st;
     st = await loadState(gameId);
@@ -236,6 +237,8 @@ export async function mount(app, [gameId]) {
     const rr = st.current;
     if (rr && rr.revealed && rr.reveal && !seenReveal.has(rr.id)) { seenReveal.add(rr.id); revealCeremony(rr.reveal, rr.title); }
     crownOnce(st, { meTeamId: me.id, scope: 'team' });
+    const extra = timeAdded(prev, st);
+    if (extra > 0) { toast(`⏱️ The host added ${extra} seconds. Keep going!`); sfx.beep(true); bumpClock(extra); }
     newSolves(prev, st).forEach((n) => {
       if (n === me.name) return;
       const r = st.current, left = r ? (new Date(r.ends_at).getTime() - serverNow()) / 1000 : 0;

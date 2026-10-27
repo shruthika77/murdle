@@ -627,3 +627,14 @@ body.projector .wrap{max-width:1500px}
 .cr-podium{border-bottom:6px solid var(--outline);box-shadow:0 14px 30px -10px rgba(0,0,0,.6)}
 .podium{border-bottom:5px solid var(--outline)}
 @media(min-width:1100px){body:not(.projector) .cv-gridcard .mgrid{--cell:48px;font-size:13.5px;grid-template-columns:30px minmax(110px,140px) repeat(var(--n2),var(--cell))}}
+
+/* +15 seconds (host only) */
+.btn.addtime{background:var(--teal);color:var(--ink-dark)}
+.btn.addtime:hover{background:#5fe0cb}
+.cb-timer{position:relative}
+.cb-timer.bump{animation:bump .7s cubic-bezier(.2,1.6,.4,1)}
+.cb-timer.bump .time{color:var(--teal)}
+.cb-timer.bump::after{content:attr(data-plus);position:absolute;right:-8px;top:-14px;font:400 22px var(--display);color:var(--ink-dark);background:var(--teal);
+  border:2.5px solid var(--outline);border-radius:10px;padding:2px 8px;box-shadow:var(--pop-sm);animation:plus 1.6s ease forwards}
+@keyframes bump{30%{transform:scale(1.12)}}
+@keyframes plus{0%{opacity:0;transform:translateY(8px) scale(.6)}20%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0;transform:translateY(-14px)}}
