@@ -44,7 +44,7 @@ export async function mount(app) {
       <div class="card mb"><div class="card-h"><h3>${icon('plus', 17)} New game</h3></div>
         <form id="ng">
           <div class="flex wrapf" style="align-items:flex-end">
-          <label class="field grow" style="margin:0;min-width:240px"><span>Game name</span><input id="gt" maxlength="80" required placeholder="Friday office mystery night"></label>
+          <label class="field grow" style="margin:0;min-width:240px"><span>Game name</span><input id="gt" maxlength="80" required placeholder="e.g. The Case of the Midnight Gala"></label>
           <div class="field rounds-pick" style="margin:0"><span>Number of rounds</span>
             <div class="stepper"><button type="button" class="st-b" data-step="-1" aria-label="Fewer rounds">−</button>
             <input id="gr" type="number" min="1" max="20" step="1" value="3" required aria-label="Number of rounds">

@@ -6,10 +6,10 @@ import { caseBanner } from './themes.js';
 /**
  * One game-play layout for every screen: the team's phone, the host console and the projector.
  *
- *   [ big case banner with the round timer                         ]
- *   [ case file (story, line-up, evidence, clues) ] [ deduction grid ]
- *   [ + optional extras under the case            ] [ answer / sealed ]
- *                                                   [ + optional extras ]
+ *   [ big case banner with the round timer                  ]
+ *   [ case file (story, line-up, evidence, clues) ] [ answer / sealed  ]
+ *   [ deduction grid (full width of the column)   ] [ + optional extras]
+ *   [ + optional extras (notebook)                ]   (sticky on wide screens)
  *
  * The shell is written once; drawCaseView() only replaces the .cv-* parts, so anything a page puts in
  * the extra slots (team panel, answer form, notebook) is left alone.
@@ -17,13 +17,12 @@ import { caseBanner } from './themes.js';
 export const caseViewShell = ({ leftExtra = '', sideExtra = '', gridTitle = 'Deduction grid' } = {}) => `
   <div class="cv">
     <div class="cv-banner"></div>
-    <div class="cols proj">
-      <div class="stack cv-main"><div class="card paper cv-case"></div>${leftExtra}</div>
-      <div class="stack cv-side">
+    <div class="cols cv-cols">
+      <div class="stack cv-main"><div class="card paper cv-case"></div>
         <div class="card cv-gridcard"><div class="card-h"><h3>${icon('search', 18)} ${gridTitle}</h3></div>
           <div class="cv-grid"></div><p class="muted xs mt-2 cv-note"></p></div>
-        <div class="cv-answer"></div>${sideExtra}
-      </div>
+        ${leftExtra}</div>
+      <div class="stack cv-side"><div class="cv-answer"></div>${sideExtra}</div>
     </div>
   </div>`;
 
